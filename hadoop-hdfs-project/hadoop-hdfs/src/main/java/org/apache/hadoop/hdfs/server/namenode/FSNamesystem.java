@@ -730,6 +730,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     FSImage fsImage = new FSImage(conf,
         FSNamesystem.getNamespaceDirs(conf),
         FSNamesystem.getNamespaceEditsDirs(conf));
+//    创建namesystem，其中创建了blockManager、cacheManager、safeMode等
     FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
@@ -1110,6 +1111,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       prog.setTotal(Phase.SAFEMODE, STEP_AWAITING_REPORTED_BLOCKS,
         getCompleteBlocksTotal());
       setBlockTotal();
+//启动pendingReplications、datanodeManager、replicationThread
       blockManager.activate(conf);
     } finally {
       writeUnlock();

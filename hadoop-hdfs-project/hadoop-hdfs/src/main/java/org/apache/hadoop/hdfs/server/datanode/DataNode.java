@@ -374,7 +374,7 @@ public class DataNode extends ReconfigurableBase
     this.lastDiskErrorCheck = 0;
     this.maxNumberOfBlocksToLog = conf.getLong(DFS_MAX_NUM_BLOCKS_TO_LOG_KEY,
         DFS_MAX_NUM_BLOCKS_TO_LOG_DEFAULT);
-
+//配置各种参数
     this.usersWithLocalPathAccess = Arrays.asList(
         conf.getTrimmedStrings(DFSConfigKeys.DFS_BLOCK_LOCAL_PATH_ACCESS_USER_KEY));
     this.connectToDnViaHostname = conf.getBoolean(
@@ -385,6 +385,7 @@ public class DataNode extends ReconfigurableBase
         DFSConfigKeys.DFS_HDFS_BLOCKS_METADATA_ENABLED_DEFAULT);
     this.supergroup = conf.get(DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY,
         DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_DEFAULT);
+    //是否启用权限
     this.isPermissionEnabled = conf.getBoolean(
         DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
         DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
@@ -412,8 +413,10 @@ public class DataNode extends ReconfigurableBase
     }
 
     try {
+//      取hostname，优先从dfs.datanode.hostname配置取
       hostName = getHostName(conf);
       LOG.info("Configured hostname is " + hostName);
+//      启动datanode
       startDataNode(conf, dataDirs, resources);
     } catch (IOException ie) {
       shutdown();
@@ -619,7 +622,9 @@ public class DataNode extends ReconfigurableBase
    */
   private static String getHostName(Configuration config)
       throws UnknownHostException {
+    //首先从dfs.datanode.hostname配置中取
     String name = config.get(DFS_DATANODE_HOST_NAME_KEY);
+    //没有这个配置在用正常方式取hostname
     if (name == null) {
       name = DNS.getDefaultHost(
           config.get(DFS_DATANODE_DNS_INTERFACE_KEY,
@@ -643,6 +648,7 @@ public class DataNode extends ReconfigurableBase
 
     if (policy.isHttpEnabled()) {
       if (secureResources == null) {
+        //取得要使用的端口
         InetSocketAddress infoSocAddr = DataNode.getInfoAddr(conf);
         int port = infoSocAddr.getPort();
         builder.addEndpoint(URI.create("http://"
@@ -688,6 +694,7 @@ public class DataNode extends ReconfigurableBase
           .getPackage().getName() + ";" + Param.class.getPackage().getName(),
           WebHdfsFileSystem.PATH_PREFIX + "/*");
     }
+    //启动服务
     this.infoServer.start();
 
     int connIdx = 0;
@@ -864,6 +871,7 @@ public class DataNode extends ReconfigurableBase
   
   private void initDataXceiver(Configuration conf) throws IOException {
     // find free port or use privileged port provided
+//    用于数据传输的tcpPeerServer，其中维护了一个ServerSocket
     TcpPeerServer tcpPeerServer;
     if (secureResources != null) {
       tcpPeerServer = new TcpPeerServer(secureResources);
@@ -871,10 +879,12 @@ public class DataNode extends ReconfigurableBase
       tcpPeerServer = new TcpPeerServer(dnConf.socketWriteTimeout,
           DataNode.getStreamingAddr(conf));
     }
+//    设置接收数据的buffersize大小，默认是128 * 1024
     tcpPeerServer.setReceiveBufferSize(HdfsConstants.DEFAULT_DATA_SOCKET_SIZE);
     streamingAddr = tcpPeerServer.getStreamingAddr();
     LOG.info("Opened streaming server at " + streamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
+//    创建DataXceiverServer用来发送和接收数据块，内部用socket实现
     xserver = new DataXceiverServer(tcpPeerServer, conf, this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
@@ -1049,7 +1059,7 @@ public class DataNode extends ReconfigurableBase
     this.conf = conf;
     this.dnConf = new DNConf(conf);
     checkSecureConfig(dnConf, conf, resources);
-
+//这个不太明白是干什么的？
     this.spanReceiverHost = SpanReceiverHost.getInstance(conf);
 
     if (dnConf.maxLockedMemory > 0) {
@@ -1076,16 +1086,20 @@ public class DataNode extends ReconfigurableBase
     }
     LOG.info("Starting DataNode with maxLockedMemory = " +
         dnConf.maxLockedMemory);
-
+//存储数据相关的类，规定了一些存储本地文件时的格式，比如以subdir开头的文件夹、以blk_开头的块文件等
     storage = new DataStorage();
     
     // global DN settings
     registerMXBean();
+//创建块文件接收器服务
     initDataXceiver(conf);
+//    启动web页面，默认端口是50075
     startInfoServer(conf);
+//    启动一个java监控线程，监控java虚拟机（因为垃圾回收等）暂停的次数，
+//  内部实现是一个线程每隔一段时间就休眠一下，如果休眠时间明显比规定时间长，则判断jvm暂停过
     pauseMonitor = new JvmPauseMonitor(conf);
     pauseMonitor.start();
-  
+//  为每个block pool管理一个BlockTokenSecretManager
     // BlockPoolTokenSecretManager is required to create ipc server.
     this.blockPoolTokenSecretManager = new BlockPoolTokenSecretManager();
 
@@ -1093,12 +1107,14 @@ public class DataNode extends ReconfigurableBase
     dnUserName = UserGroupInformation.getCurrentUser().getShortUserName();
     LOG.info("dnUserName = " + dnUserName);
     LOG.info("supergroup = " + supergroup);
+//初始化ipc服务（用于通信）
     initIpcServer(conf);
-
+//监控数据
     metrics = DataNodeMetrics.create(conf, getDisplayName());
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
-    
+//    管理BPOfferService相关
     blockPoolManager = new BlockPoolManager(this);
+//    这里向namenode注册了自己，并开始轮询namenode请求待执行命令？
     blockPoolManager.refreshNamenodes(conf);
 
     // Create the ReadaheadPool from the DataNode context so we can
@@ -2158,14 +2174,18 @@ public class DataNode extends ReconfigurableBase
    *  If this thread is specifically interrupted, it will stop waiting.
    */
   public void runDatanodeDaemon() throws IOException {
+//    blockPoolManager服务启动,并开始轮询namenode请求待执行命令？
     blockPoolManager.startAll();
 
+//    数据传输服务启动
     // start dataXceiveServer
     dataXceiverServer.start();
     if (localDataXceiverServer != null) {
       localDataXceiverServer.start();
     }
+//   ipc服务启动
     ipcServer.start();
+//    插件启动
     startPlugins(conf);
   }
 
@@ -2208,14 +2228,17 @@ public class DataNode extends ReconfigurableBase
       printUsage(System.err);
       return null;
     }
+    //取得datanode的实际数据存放位置
     Collection<StorageLocation> dataLocations = getStorageLocations(conf);
     UserGroupInformation.setConfiguration(conf);
     SecurityUtil.login(conf, DFS_DATANODE_KEYTAB_FILE_KEY,
         DFS_DATANODE_KERBEROS_PRINCIPAL_KEY);
+    //创建实例
     return makeInstance(dataLocations, conf, resources);
   }
 
   public static List<StorageLocation> getStorageLocations(Configuration conf) {
+    //从dfs.datanode.data.dir配置取出datanode数据存放的位置
     Collection<String> rawLocations =
         conf.getTrimmedStringCollection(DFS_DATANODE_DATA_DIR_KEY);
     List<StorageLocation> locations =
@@ -2224,6 +2247,7 @@ public class DataNode extends ReconfigurableBase
     for(String locationString : rawLocations) {
       final StorageLocation location;
       try {
+        //解析StorageLocation，默认是disk类型
         location = StorageLocation.parse(locationString);
       } catch (IOException ioe) {
         LOG.error("Failed to initialize storage directory " + locationString
@@ -2259,8 +2283,10 @@ public class DataNode extends ReconfigurableBase
   @InterfaceAudience.Private
   public static DataNode createDataNode(String args[], Configuration conf,
       SecureResources resources) throws IOException {
+    //创建datanode
     DataNode dn = instantiateDataNode(args, conf, resources);
     if (dn != null) {
+      //启动datanode内部服务
       dn.runDatanodeDaemon();
     }
     return dn;
@@ -2315,16 +2341,20 @@ public class DataNode extends ReconfigurableBase
   static DataNode makeInstance(Collection<StorageLocation> dataDirs,
       Configuration conf, SecureResources resources) throws IOException {
     LocalFileSystem localFS = FileSystem.getLocal(conf);
+    //本地目录权限，默认是700
     FsPermission permission = new FsPermission(
         conf.get(DFS_DATANODE_DATA_DIR_PERMISSION_KEY,
                  DFS_DATANODE_DATA_DIR_PERMISSION_DEFAULT));
+    //用来创建本地目录和检查目录权限
     DataNodeDiskChecker dataNodeDiskChecker =
         new DataNodeDiskChecker(permission);
+    //返回经过检查后没问题的目录（检查过程中可能会创建该目录）
     List<StorageLocation> locations =
         checkStorageLocations(dataDirs, localFS, dataNodeDiskChecker);
     DefaultMetricsSystem.initialize("DataNode");
 
     assert locations.size() > 0 : "number of data directories should be > 0";
+    //创建dataNode对象
     return new DataNode(conf, locations, resources);
   }
 
@@ -2338,6 +2368,7 @@ public class DataNode extends ReconfigurableBase
     for (StorageLocation location : dataDirs) {
       final URI uri = location.getUri();
       try {
+        //如果需要的话，创建文件夹，并且检查读写权限，如果没问题，放入locations中返回
         dataNodeDiskChecker.checkDir(localFS, new Path(uri));
         locations.add(location);
       } catch (IOException ioe) {
@@ -2435,7 +2466,9 @@ public class DataNode extends ReconfigurableBase
     int errorCode = 0;
     try {
       StringUtils.startupShutdownMessage(DataNode.class, args, LOG);
+      //类似namenode，大部分datanode的启动命令在createDataNode中得到处理
       DataNode datanode = createDataNode(args, null, resources);
+      //如果datanode不为null，则是创建了datanode服务，这时候应该调用datanode的join方法等待服务关闭
       if (datanode != null) {
         datanode.join();
       } else {
@@ -2455,6 +2488,7 @@ public class DataNode extends ReconfigurableBase
   }
   
   public static void main(String args[]) {
+    //判断参数是不是打印帮助信息，如果是，打印帮助信息并退出
     if (DFSUtil.parseHelpArgument(args, DataNode.USAGE, System.out, true)) {
       System.exit(0);
     }

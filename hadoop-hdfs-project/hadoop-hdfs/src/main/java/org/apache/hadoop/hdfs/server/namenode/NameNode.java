@@ -593,7 +593,7 @@ public class NameNode implements NameNodeStatusMXBean {
     }
 
     this.spanReceiverHost = SpanReceiverHost.getInstance(conf);
-//从硬盘中实例化namesystem
+//从硬盘中实例化namesystem,namesystem中初始化了BlockManager、CacheManager等
     loadNamesystem(conf);
 //创建rpc服务，主要是创建了serviceRpcServer和clientRpcServer分别监听datanode和客户端的请求
     rpcServer = createRpcServer(conf);
@@ -629,6 +629,7 @@ public class NameNode implements NameNodeStatusMXBean {
   /** Start the services common to active and standby states */
   private void startCommonServices(Configuration conf) throws IOException {
     //启动namesystem的相关服务，包括检查硬盘容量等
+//    另外，进入SafeMode状态，等待datanode报告block情况
     namesystem.startCommonServices(conf, haContext);
     registerNNSMXBean();
     //为standby的namenode启动http服务
@@ -1522,7 +1523,7 @@ public class NameNode implements NameNodeStatusMXBean {
     try {
       //打印startup信息，并且增加shutdown的钩子函数（该函数打印shutdown信息）
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
-      //所有hdfs相关命令调用统一的命令
+      //所有namenode相关启动命令调用统一的方法
       NameNode namenode = createNameNode(argv, null);
 //      如果namenode不为null，则表明是调用的启动namenode方法。这时候应该调用namenode的join方法等待服务关闭
       if (namenode != null) {

@@ -271,6 +271,7 @@ class BPOfferService {
   //This must be called only by blockPoolManager
   void start() {
     for (BPServiceActor actor : bpServices) {
+//      查看BPServiceActor的run方法
       actor.start();
     }
   }
