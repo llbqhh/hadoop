@@ -581,21 +581,21 @@ public class NameNode implements NameNodeStatusMXBean {
           intervals);
       }
     }
-
+//设置ugi
     UserGroupInformation.setConfiguration(conf);
     loginAsNameNodeUser(conf);
-
+//统计namenode各种信息
     NameNode.initMetrics(conf, this.getRole());
     StartupProgressMetrics.register(startupProgress);
-
+//如果是正常服务的namenode，需要为他启动一个httpserver（namenode的web界面，一路点进去可以看到默认端口是50070）
     if (NamenodeRole.NAMENODE == role) {
       startHttpServer(conf);
     }
 
     this.spanReceiverHost = SpanReceiverHost.getInstance(conf);
-
+//从硬盘中实例化namesystem
     loadNamesystem(conf);
-
+//创建rpc服务，主要是创建了serviceRpcServer和clientRpcServer分别监听datanode和客户端的请求
     rpcServer = createRpcServer(conf);
     if (clientNamenodeAddress == null) {
       // This is expected for MiniDFSCluster. Set it now using 
@@ -613,7 +613,7 @@ public class NameNode implements NameNodeStatusMXBean {
     pauseMonitor = new JvmPauseMonitor(conf);
     pauseMonitor.start();
     metrics.getJvmMetrics().setPauseMonitor(pauseMonitor);
-    
+//    启动rpc等服务（以及standby的namenode的相关服务）
     startCommonServices(conf);
   }
   
@@ -628,14 +628,18 @@ public class NameNode implements NameNodeStatusMXBean {
 
   /** Start the services common to active and standby states */
   private void startCommonServices(Configuration conf) throws IOException {
+    //启动namesystem的相关服务，包括检查硬盘容量等
     namesystem.startCommonServices(conf, haContext);
     registerNNSMXBean();
+    //为standby的namenode启动http服务
     if (NamenodeRole.NAMENODE != role) {
       startHttpServer(conf);
       httpServer.setNameNodeAddress(getNameNodeAddress());
       httpServer.setFSImage(getFSImage());
     }
+    //启动rpc服务
     rpcServer.start();
+    //加载rpc服务插件（自定义rpc调用方法）
     plugins = conf.getInstances(DFS_NAMENODE_PLUGINS_KEY,
         ServicePlugin.class);
     for (ServicePlugin p: plugins) {
@@ -745,6 +749,7 @@ public class NameNode implements NameNodeStatusMXBean {
    * @throws IOException
    */
   public NameNode(Configuration conf) throws IOException {
+    //默认是创建正常的namenode服务
     this(conf, NamenodeRole.NAMENODE);
   }
 
@@ -761,6 +766,7 @@ public class NameNode implements NameNodeStatusMXBean {
     this.haContext = createHAContext();
     try {
       initializeGenericKeys(conf, nsId, namenodeId);
+      //这里真正初始化namenode服务
       initialize(conf);
       try {
         haContext.writeLock();
@@ -1365,11 +1371,20 @@ public class NameNode implements NameNodeStatusMXBean {
       StartupOption.METADATAVERSION, fs, null);
   }
 
+  /**
+   * 在这个方法里进行了实际的程序类型的解析，并且不同类型的程序调用了不同的方法，
+   * 只有在命令为启动namenode时，才会真正的创建并返回namenode
+   * @param argv
+   * @param conf
+   * @return
+   * @throws IOException
+   */
   public static NameNode createNameNode(String argv[], Configuration conf)
       throws IOException {
     LOG.info("createNameNode " + Arrays.asList(argv));
     if (conf == null)
       conf = new HdfsConfiguration();
+    //解析启动参数类型
     StartupOption startOpt = parseArguments(argv);
     if (startOpt == null) {
       printUsage(System.err);
@@ -1437,6 +1452,7 @@ public class NameNode implements NameNodeStatusMXBean {
         return null;
       }
       default: {
+        //创建namenode并返回，这里实际启动了namenode服务
         DefaultMetricsSystem.initialize("NameNode");
         return new NameNode(conf);
       }
@@ -1498,13 +1514,17 @@ public class NameNode implements NameNodeStatusMXBean {
   /**
    */
   public static void main(String argv[]) throws Exception {
+    //判断参数是否是打印帮助信息
     if (DFSUtil.parseHelpArgument(argv, NameNode.USAGE, System.out, true)) {
       System.exit(0);
     }
 
     try {
+      //打印startup信息，并且增加shutdown的钩子函数（该函数打印shutdown信息）
       StringUtils.startupShutdownMessage(NameNode.class, argv, LOG);
+      //所有hdfs相关命令调用统一的命令
       NameNode namenode = createNameNode(argv, null);
+//      如果namenode不为null，则表明是调用的启动namenode方法。这时候应该调用namenode的join方法等待服务关闭
       if (namenode != null) {
         namenode.join();
       }

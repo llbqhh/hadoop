@@ -1511,6 +1511,7 @@ public class DFSUtil {
       try {
         CommandLineParser parser = new PosixParser();
         CommandLine cmdLine = parser.parse(helpOptions, args);
+        //判断是否是输出打印信息，如果是则打印。helpOpt中存的是h、help等
         if (cmdLine.hasOption(helpOpt.getOpt())
             || cmdLine.hasOption(helpOpt.getLongOpt())) {
           // should print out the help information

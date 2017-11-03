@@ -281,6 +281,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       int serviceHandlerCount =
         conf.getInt(DFS_NAMENODE_SERVICE_HANDLER_COUNT_KEY,
                     DFS_NAMENODE_SERVICE_HANDLER_COUNT_DEFAULT);
+//      构建器模式创建rpc服务
       this.serviceRpcServer = new RPC.Builder(conf)
           .setProtocol(
               org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolPB.class)
@@ -424,6 +425,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
    * Wait until the RPC servers have shutdown.
    */
   void join() throws InterruptedException {
+//      两个server最终都是调用了wait方法
     clientRpcServer.join();
     if (serviceRpcServer != null) {
       serviceRpcServer.join();      
