@@ -2519,6 +2519,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
     
     try {
+//      这里创建一个文件
       status = startFileInt(src, permissions, holder, clientMachine, flag,
           createParent, replication, blockSize, supportedVersions,
           cacheEntry != null);
@@ -2557,9 +2558,11 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       }
       NameNode.stateChangeLog.debug(builder.toString());
     }
+//    判断文件路径是否合法
     if (!DFSUtil.isValidName(src)) {
       throw new InvalidPathException(src);
     }
+//    检查副本数是否在合法范围内
     blockManager.verifyReplication(src, replication, clientMachine);
 
     boolean skipSync = false;
@@ -2595,6 +2598,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     readLock();
     try {
       src = resolvePath(src, pathComponents);
+//      调用FSDirectory的getINodesInPath4Write方法取得INodesInPath，FSDirectory是使用内存存储数据的
       INodesInPath iip = dir.getINodesInPath4Write(src);
       // Nothing to do if the path is not within an EZ
       if (dir.isInAnEZ(iip)) {
@@ -2629,8 +2633,10 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     writeLock();
     try {
       checkOperation(OperationCategory.WRITE);
+//      如果namenode是安全模式，则不允许创建
       checkNameNodeSafeMode("Cannot create file" + src);
       src = resolvePath(src, pathComponents);
+//      在这里真正创建
       toRemoveBlocks = startFileInternal(pc, src, permissions, holder, 
           clientMachine, create, overwrite, createParent, replication, 
           blockSize, isLazyPersist, suite, protocolVersion, edek, logRetryCache);
@@ -2703,6 +2709,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
     }
 
     final INodeFile myFile = INodeFile.valueOf(inode, src, true);
+//    检查权限
     if (isPermissionEnabled) {
       if (overwrite && myFile != null) {
         checkPathAccess(pc, src, FsAction.WRITE);
@@ -2729,6 +2736,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
         if (overwrite) {
           toRemoveBlocks = new BlocksMapUpdateInfo();
           List<INode> toRemoveINodes = new ChunkedArrayList<INode>();
+//          如果是重写，则需要删除旧数据
           long ret = dir.delete(src, toRemoveBlocks, toRemoveINodes, now());
           if (ret >= 0) {
             incrDeletedFileCount(ret);
@@ -2749,6 +2757,7 @@ public class FSNamesystem implements Namesystem, FSClusterStats,
       Path parent = new Path(src).getParent();
       if (parent != null && mkdirsRecursively(parent.toString(),
               permissions, true, now())) {
+//        在namespace中创建文件
         newNode = dir.addFile(src, permissions, replication, blockSize,
                               holder, clientMachine);
       }

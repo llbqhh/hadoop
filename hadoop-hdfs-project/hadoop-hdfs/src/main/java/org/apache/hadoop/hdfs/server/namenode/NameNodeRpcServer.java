@@ -578,6 +578,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
           + MAX_PATH_LENGTH + " characters, " + MAX_PATH_DEPTH + " levels.");
     }
     namesystem.checkOperation(OperationCategory.WRITE);
+//    实际上调用了namesystem的startFile方法
     HdfsFileStatus fileStatus = namesystem.startFile(src, new PermissionStatus(
         getRemoteUser().getShortUserName(), null, masked),
         clientName, clientMachine, flag.get(), createParent, replication,
@@ -824,6 +825,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
           + ", recursive=" + recursive);
     }
     namesystem.checkOperation(OperationCategory.WRITE);
+//    最终调用了namesystem的delete方法
     boolean ret = namesystem.delete(src, recursive);
     if (ret) 
       metrics.incrDeleteFileOps();

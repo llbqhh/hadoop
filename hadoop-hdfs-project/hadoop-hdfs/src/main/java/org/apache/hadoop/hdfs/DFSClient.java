@@ -1626,6 +1626,8 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    * at the creation time only. HDFS could move the blocks during balancing or
    * replication, to move the blocks from favored nodes. A value of null means
    * no favored nodes for this create
+   * 创建一个dfs文件，并返回这个文件的output流以便客户端向其中写入数据，调用这个方法需要
+   * 使用DistributedFileSystem类，不能直接调用DFSClient类
    */
   public DFSOutputStream create(String src, 
                              FsPermission permission,
@@ -1654,6 +1656,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
                          + favoredNodes[i].getPort();
       }
     }
+    //创建文件以及这个文件的输出流
     final DFSOutputStream result = DFSOutputStream.newStreamForCreate(this,
         src, masked, flag, createParent, replication, blockSize, progress,
         buffersize, dfsClientConf.createChecksum(checksumOpt),

@@ -1722,6 +1722,9 @@ public class DFSOutputStream extends FSOutputSummer
     while (shouldRetry) {
       shouldRetry = false;
       try {
+        //调用dfsCient的namenode来创建hdfs文件，这个namenode是一个ClientProtocol的代理
+        //这里实际调用了ClientNamenodeProtocolTranslatorPB的create方法，
+//方法内部调用了ClientNamenodeProtocolPB（NameNodeProxies类的createNNProxyWithClientProtocol方法所创建）的create方法
         stat = dfsClient.namenode.create(src, masked, dfsClient.clientName,
             new EnumSetWritable<CreateFlag>(flag), createParent, replication,
             blockSize, SUPPORTED_CRYPTO_VERSIONS);

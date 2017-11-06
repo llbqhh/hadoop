@@ -390,6 +390,7 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
   @Override
   public CreateResponseProto create(RpcController controller,
       CreateRequestProto req) throws ServiceException {
+//    datanode的create请求最终被namenode的rpc服务响应，在这里调用了NameNodeRpcServer的create方法
     try {
       HdfsFileStatus result = server.create(req.getSrc(),
           PBHelper.convert(req.getMasked()), req.getClientName(),
@@ -586,6 +587,7 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
   public DeleteResponseProto delete(RpcController controller,
     DeleteRequestProto req) throws ServiceException {
     try {
+//      datanode的delete请求最终被namenode的rpc服务响应，在这里调用了NameNodeRpcServer的delete方法
       boolean result =  server.delete(req.getSrc(), req.getRecursive());
       return DeleteResponseProto.newBuilder().setResult(result).build();
     } catch (IOException e) {

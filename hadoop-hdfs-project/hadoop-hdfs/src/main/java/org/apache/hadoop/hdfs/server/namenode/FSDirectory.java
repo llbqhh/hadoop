@@ -1245,6 +1245,7 @@ public class FSDirectory implements Closeable {
       } else {
         List<INodeDirectory> snapshottableDirs = new ArrayList<INodeDirectory>();
         checkSnapshot(inodesInPath.getLastINode(), snapshottableDirs);
+//        这里实际删除inode
         filesRemoved = unprotectedDelete(inodesInPath, collectedBlocks,
             removedINodes, mtime);
         namesystem.removeSnapshottableDirs(snapshottableDirs);
