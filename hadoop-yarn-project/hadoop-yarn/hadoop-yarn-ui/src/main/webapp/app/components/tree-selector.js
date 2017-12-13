@@ -146,21 +146,21 @@ export default Ember.Component.extend({
 
       }.bind(this))
     .on("dblclick", function (d) {
-      document.location.href = "#/yarn-queue/" + d.queueData.get("name") + "/info";
+      document.location.href = "#/yarn-queue/" + d.queueData.get("name") + "/apps";
     });
 
     nodeEnter.append("circle")
       .attr("r", 1e-6)
       .style("fill", function(d) {
         var maxCap = d.queueData.get(this.max);
-        maxCap = maxCap == undefined ? 100 : maxCap;
+        maxCap = maxCap === undefined ? 100 : maxCap;
         var usedCap = d.queueData.get(this.used) / maxCap * 100.0;
         if (usedCap <= 60.0) {
-          return "LimeGreen";
+          return "mediumaquamarine";
         } else if (usedCap <= 100.0) {
-          return "DarkOrange";
+          return "coral";
         } else {
-          return "LightCoral";
+          return "salmon";
         }
       }.bind(this));
 
@@ -172,7 +172,7 @@ export default Ember.Component.extend({
       .attr("text-anchor", function() { return "middle"; })
       .text(function(d) {
         var maxCap = d.queueData.get(this.max);
-        maxCap = maxCap == undefined ? 100 : maxCap;
+        maxCap = maxCap === undefined ? 100 : maxCap;
         var usedCap = d.queueData.get(this.used) / maxCap * 100.0;
         if (usedCap >= 100.0) {
           return usedCap.toFixed(0) + "%";

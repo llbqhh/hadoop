@@ -50,7 +50,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
@@ -425,6 +424,7 @@ public class TestDistributedFileSystem {
     Configuration conf = getTestConfiguration();
     final long grace = 1000L;
     MiniDFSCluster cluster = null;
+    LeaseRenewer.setLeaseRenewerGraceDefault(grace);
 
     try {
       cluster = new MiniDFSCluster.Builder(conf).numDataNodes(2).build();
@@ -437,10 +437,6 @@ public class TestDistributedFileSystem {
 
       {
         final DistributedFileSystem dfs = cluster.getFileSystem();
-        Method setMethod = dfs.dfs.getLeaseRenewer().getClass()
-            .getDeclaredMethod("setGraceSleepPeriod", long.class);
-        setMethod.setAccessible(true);
-        setMethod.invoke(dfs.dfs.getLeaseRenewer(), grace);
         Method checkMethod = dfs.dfs.getLeaseRenewer().getClass()
             .getDeclaredMethod("isRunning");
         checkMethod.setAccessible(true);
@@ -1270,6 +1266,25 @@ public class TestDistributedFileSystem {
     }
   }
 
+  @Test
+  public void testListStatusOfSnapshotDirs() throws IOException {
+    MiniDFSCluster cluster = new MiniDFSCluster.Builder(new HdfsConfiguration())
+        .build();
+    try {
+      DistributedFileSystem dfs = cluster.getFileSystem();
+      dfs.create(new Path("/parent/test1/dfsclose/file-0"));
+      Path snapShotDir = new Path("/parent/test1/");
+      dfs.allowSnapshot(snapShotDir);
+
+      FileStatus status = dfs.getFileStatus(new Path("/parent/test1"));
+      assertTrue(status.isSnapshotEnabled());
+      status = dfs.getFileStatus(new Path("/parent/"));
+      assertFalse(status.isSnapshotEnabled());
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
   @Test(timeout=10000)
   public void testDFSClientPeerReadTimeout() throws IOException {
     final int timeout = 1000;
@@ -1617,7 +1632,7 @@ public class TestDistributedFileSystem {
         fs.enableErasureCodingPolicy("notExistECName");
         Assert.fail("enable the policy that doesn't exist should fail");
       } catch (Exception e) {
-        GenericTestUtils.assertExceptionContains("does not exists", e);
+        GenericTestUtils.assertExceptionContains("does not exist", e);
         // pass
       }
 
@@ -1626,7 +1641,7 @@ public class TestDistributedFileSystem {
         fs.disableErasureCodingPolicy("notExistECName");
         Assert.fail("disable the policy that doesn't exist should fail");
       } catch (Exception e) {
-        GenericTestUtils.assertExceptionContains("does not exists", e);
+        GenericTestUtils.assertExceptionContains("does not exist", e);
         // pass
       }
 

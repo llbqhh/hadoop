@@ -32,7 +32,6 @@ import org.apache.hadoop.crypto.CipherSuite;
 import org.apache.hadoop.crypto.CryptoProtocolVersion;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
-import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension.CryptoExtension;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension.EncryptedKeyVersion;
 import org.apache.hadoop.fs.FileEncryptionInfo;
 import org.apache.hadoop.fs.FileStatus;
@@ -381,10 +380,16 @@ final class FSDirEncryptionZoneOp {
   static void saveFileXAttrsForBatch(FSDirectory fsd,
       List<FileEdekInfo> batch) {
     assert fsd.getFSNamesystem().hasWriteLock();
+    assert !fsd.hasWriteLock();
     if (batch != null && !batch.isEmpty()) {
       for (FileEdekInfo entry : batch) {
         final INode inode = fsd.getInode(entry.getInodeId());
-        Preconditions.checkNotNull(inode);
+        // no dir lock, so inode could be removed. no-op if so.
+        if (inode == null) {
+          NameNode.LOG.info("Cannot find inode {}, skip saving xattr for"
+              + " re-encryption", entry.getInodeId());
+          continue;
+        }
         fsd.getEditLog().logSetXAttrs(inode.getFullPathName(),
             inode.getXAttrFeature().getXAttrs(), false);
       }
@@ -698,9 +703,7 @@ final class FSDirEncryptionZoneOp {
     // drain the local cache of the key provider.
     // Do not invalidateCache on the server, since that's the responsibility
     // when rolling the key version.
-    if (dir.getProvider() instanceof CryptoExtension) {
-      ((CryptoExtension) dir.getProvider()).drain(keyName);
-    }
+    dir.getProvider().drain(keyName);
     final EncryptedKeyVersion edek;
     try {
       edek = dir.getProvider().generateEncryptedKey(keyName);

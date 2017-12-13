@@ -297,6 +297,16 @@ message GetSnapshotDiffReportResponseProto {
   required SnapshotDiffReportProto diffReport = 1;
 }
 
+message GetSnapshotDiffReportListingRequestProto {
+  required string snapshotRoot = 1;
+  required string fromSnapshot = 2;
+  required string toSnapshot = 3;
+  optional SnapshotDiffReportCursorProto cursor = 4;
+}
+
+message GetSnapshotDiffReportListingResponseProto {
+  required SnapshotDiffReportListingProto diffReport = 1;
+}
 message RenewLeaseRequestProto {
   required string clientName = 1;
 }
@@ -327,10 +337,10 @@ message GetFsStatsResponseProto {
   optional uint64 pending_deletion_blocks = 9;
 }
 
-message GetFsBlocksStatsRequestProto { // no input paramters
+message GetFsReplicatedBlockStatsRequestProto { // no input paramters
 }
 
-message GetFsBlocksStatsResponseProto {
+message GetFsReplicatedBlockStatsResponseProto {
   required uint64 low_redundancy = 1;
   required uint64 corrupt_blocks = 2;
   required uint64 missing_blocks = 3;
@@ -339,10 +349,10 @@ message GetFsBlocksStatsResponseProto {
   required uint64 pending_deletion_blocks = 6;
 }
 
-message GetFsECBlockGroupsStatsRequestProto { // no input paramters
+message GetFsECBlockGroupStatsRequestProto { // no input paramters
 }
 
-message GetFsECBlockGroupsStatsResponseProto {
+message GetFsECBlockGroupStatsResponseProto {
   required uint64 low_redundancy = 1;
   required uint64 corrupt_blocks = 2;
   required uint64 missing_blocks = 3;
@@ -482,6 +492,15 @@ message GetFileInfoRequestProto {
 }
 
 message GetFileInfoResponseProto {
+  optional HdfsFileStatusProto fs = 1;
+}
+
+message GetLocatedFileInfoRequestProto {
+  optional string src = 1;
+  optional bool needBlockToken = 2 [default = false];
+}
+
+message GetLocatedFileInfoResponseProto {
   optional HdfsFileStatusProto fs = 1;
 }
 
@@ -831,10 +850,10 @@ service ClientNamenodeProtocol {
   rpc recoverLease(RecoverLeaseRequestProto)
       returns(RecoverLeaseResponseProto);
   rpc getFsStats(GetFsStatusRequestProto) returns(GetFsStatsResponseProto);
-  rpc getFsBlocksStats(GetFsBlocksStatsRequestProto)
-      returns (GetFsBlocksStatsResponseProto);
-  rpc getFsECBlockGroupsStats(GetFsECBlockGroupsStatsRequestProto)
-      returns (GetFsECBlockGroupsStatsResponseProto);
+  rpc getFsReplicatedBlockStats(GetFsReplicatedBlockStatsRequestProto)
+      returns (GetFsReplicatedBlockStatsResponseProto);
+  rpc getFsECBlockGroupStats(GetFsECBlockGroupStatsRequestProto)
+      returns (GetFsECBlockGroupStatsResponseProto);
   rpc getDatanodeReport(GetDatanodeReportRequestProto)
       returns(GetDatanodeReportResponseProto);
   rpc getDatanodeStorageReport(GetDatanodeStorageReportRequestProto)
@@ -858,6 +877,8 @@ service ClientNamenodeProtocol {
       returns(ListCorruptFileBlocksResponseProto);
   rpc metaSave(MetaSaveRequestProto) returns(MetaSaveResponseProto);
   rpc getFileInfo(GetFileInfoRequestProto) returns(GetFileInfoResponseProto);
+  rpc getLocatedFileInfo(GetLocatedFileInfoRequestProto)
+      returns(GetLocatedFileInfoResponseProto);
   rpc addCacheDirective(AddCacheDirectiveRequestProto)
       returns (AddCacheDirectiveResponseProto);
   rpc modifyCacheDirective(ModifyCacheDirectiveRequestProto)
@@ -913,6 +934,8 @@ service ClientNamenodeProtocol {
       returns(DeleteSnapshotResponseProto);
   rpc getSnapshotDiffReport(GetSnapshotDiffReportRequestProto)
       returns(GetSnapshotDiffReportResponseProto);
+  rpc getSnapshotDiffReportListing(GetSnapshotDiffReportListingRequestProto)
+      returns(GetSnapshotDiffReportListingResponseProto);
   rpc isFileClosed(IsFileClosedRequestProto)
       returns(IsFileClosedResponseProto);
   rpc modifyAclEntries(ModifyAclEntriesRequestProto)

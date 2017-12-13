@@ -23,7 +23,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.FSLimitException;
+import org.apache.hadoop.hdfs.protocol.HdfsFileStatus;
 import org.apache.hadoop.hdfs.protocol.SnapshotDiffReport;
+import org.apache.hadoop.hdfs.protocol.SnapshotDiffReportListing;
 import org.apache.hadoop.hdfs.protocol.SnapshotException;
 import org.apache.hadoop.hdfs.protocol.SnapshottableDirectoryStatus;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory.DirOp;
@@ -164,6 +166,29 @@ class FSDirSnapshotOp {
     return diffs;
   }
 
+  static SnapshotDiffReportListing getSnapshotDiffReportListing(FSDirectory fsd,
+      SnapshotManager snapshotManager, String path, String fromSnapshot,
+      String toSnapshot, byte[] startPath, int index,
+      int snapshotDiffReportLimit) throws IOException {
+    SnapshotDiffReportListing diffs;
+    final FSPermissionChecker pc = fsd.getPermissionChecker();
+    fsd.readLock();
+    try {
+      INodesInPath iip = fsd.resolvePath(pc, path, DirOp.READ);
+      if (fsd.isPermissionEnabled()) {
+        checkSubtreeReadPermission(fsd, pc, path, fromSnapshot);
+        checkSubtreeReadPermission(fsd, pc, path, toSnapshot);
+      }
+      diffs = snapshotManager
+          .diff(iip, path, fromSnapshot, toSnapshot, startPath, index,
+              snapshotDiffReportLimit);
+    } catch (Exception e) {
+      throw e;
+    } finally {
+      fsd.readUnlock();
+    }
+    return diffs;
+  }
   /** Get a collection of full snapshot paths given file and snapshot dir.
    * @param lsf a list of snapshottable features
    * @param file full path of the file
@@ -189,7 +214,9 @@ class FSDirSnapshotOp {
           snapname += Path.SEPARATOR;
         }
         snapname += file.substring(file.indexOf(dirName) + dirName.length());
-        if (fsd.getFSNamesystem().getFileInfo(snapname, true) != null) {
+        HdfsFileStatus stat =
+            fsd.getFSNamesystem().getFileInfo(snapname, true, false, false);
+        if (stat != null) {
           snaps.add(snapname);
         }
       }

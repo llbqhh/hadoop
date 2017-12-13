@@ -42,12 +42,10 @@ import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.Shell;
 import org.apache.hadoop.util.Shell.CommandExecutor;
 import org.apache.hadoop.util.Shell.ExitCodeException;
 import org.apache.hadoop.util.Shell.ShellCommandExecutor;
-import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
@@ -135,7 +133,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
   }
 
   @Override
-  public void init() throws IOException {
+  public void init(Context nmContext) throws IOException {
     // nothing to do or verify here
   }
 
@@ -275,7 +273,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
       sb.writeLocalWrapperScript(launchDst, pidFile);
     } else {
       LOG.info("Container " + containerIdStr
-          + " was marked as inactive. Returning terminated error");
+          + " pid file not set. Returning terminated error");
       return ExitCode.TERMINATED.getExitCode();
     }
     
@@ -320,8 +318,7 @@ public class DefaultContainerExecutor extends ContainerExecutor {
           builder.append("Exception message: ");
           builder.append(e.getMessage()).append("\n");
         }
-        builder.append("Stack trace: ");
-        builder.append(StringUtils.stringifyException(e)).append("\n");
+
         if (!shExec.getOutput().isEmpty()) {
           builder.append("Shell output: ");
           builder.append(shExec.getOutput()).append("\n");
@@ -415,15 +412,11 @@ public class DefaultContainerExecutor extends ContainerExecutor {
      */
     public void writeLocalWrapperScript(Path launchDst, Path pidFile)
         throws IOException {
-      DataOutputStream out = null;
-      PrintStream pout = null;
-
-      try {
-        out = lfs.create(wrapperScriptPath, EnumSet.of(CREATE, OVERWRITE));
-        pout = new PrintStream(out, false, "UTF-8");
+      try (DataOutputStream out =
+               lfs.create(wrapperScriptPath, EnumSet.of(CREATE, OVERWRITE));
+           PrintStream pout =
+               new PrintStream(out, false, "UTF-8")) {
         writeLocalWrapperScript(launchDst, pidFile, pout);
-      } finally {
-        IOUtils.cleanupWithLogger(LOG, pout, out);
       }
     }
 
@@ -490,11 +483,10 @@ public class DefaultContainerExecutor extends ContainerExecutor {
 
     private void writeSessionScript(Path launchDst, Path pidFile)
         throws IOException {
-      DataOutputStream out = null;
-      PrintStream pout = null;
-      try {
-        out = lfs.create(sessionScriptPath, EnumSet.of(CREATE, OVERWRITE));
-        pout = new PrintStream(out, false, "UTF-8");
+      try (DataOutputStream out =
+               lfs.create(sessionScriptPath, EnumSet.of(CREATE, OVERWRITE));
+           PrintStream pout =
+               new PrintStream(out, false, "UTF-8")) {
         // We need to do a move as writing to a file is not atomic
         // Process reading a file being written to may get garbled data
         // hence write pid to tmp file first followed by a mv
@@ -504,8 +496,6 @@ public class DefaultContainerExecutor extends ContainerExecutor {
         pout.println("/bin/mv -f " + pidFile.toString() + ".tmp " + pidFile);
         String exec = Shell.isSetsidAvailable? "exec setsid" : "exec";
         pout.printf("%s /bin/bash \"%s\"", exec, launchDst.toUri().getPath());
-      } finally {
-        IOUtils.cleanupWithLogger(LOG, pout, out);
       }
       lfs.setPermission(sessionScriptPath,
           ContainerExecutor.TASK_LAUNCH_SCRIPT_PERMISSION);

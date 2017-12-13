@@ -41,20 +41,21 @@ import org.apache.hadoop.yarn.server.api.protocolrecords.NodeHeartbeatResponse;
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerRequest;
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerResponse;
 import org.apache.hadoop.yarn.server.api.records.AppCollectorData;
+import org.apache.hadoop.yarn.server.api.protocolrecords.UnRegisterNodeManagerRequest;
 import org.apache.hadoop.yarn.server.api.records.MasterKey;
 import org.apache.hadoop.yarn.server.api.records.NodeHealthStatus;
 import org.apache.hadoop.yarn.server.api.records.NodeStatus;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils;
 import org.apache.hadoop.yarn.util.Records;
 import org.apache.hadoop.yarn.util.YarnVersionInfo;
+import org.apache.hadoop.yarn.util.resource.Resources;
 import org.eclipse.jetty.util.log.Log;
 
 public class MockNM {
 
   private int responseId;
   private NodeId nodeId;
-  private long memory;
-  private int vCores;
+  private Resource capatibility;
   private ResourceTrackerService resourceTracker;
   private int httpPort = 2;
   private MasterKey currentContainerTokenMasterKey;
@@ -75,13 +76,25 @@ public class MockNM {
 
   public MockNM(String nodeIdStr, int memory, int vcores,
       ResourceTrackerService resourceTracker) {
-    this(nodeIdStr, memory, vcores, resourceTracker, YarnVersionInfo.getVersion());
+    this(nodeIdStr, memory, vcores, resourceTracker,
+        YarnVersionInfo.getVersion());
   }
 
   public MockNM(String nodeIdStr, int memory, int vcores,
       ResourceTrackerService resourceTracker, String version) {
-    this.memory = memory;
-    this.vCores = vcores;
+    this(nodeIdStr, Resource.newInstance(memory, vcores), resourceTracker,
+        version);
+  }
+
+  public MockNM(String nodeIdStr, Resource capatibility,
+      ResourceTrackerService resourceTracker) {
+    this(nodeIdStr, capatibility, resourceTracker,
+        YarnVersionInfo.getVersion());
+  }
+
+  public MockNM(String nodeIdStr, Resource capatibility,
+      ResourceTrackerService resourceTracker, String version) {
+    this.capatibility = capatibility;
     this.resourceTracker = resourceTracker;
     this.version = version;
     String[] splits = nodeIdStr.split(":");
@@ -130,6 +143,13 @@ public class MockNM {
     return this.registeringCollectors;
   }
 
+  public void unRegisterNode() throws Exception {
+    UnRegisterNodeManagerRequest request = Records
+        .newRecord(UnRegisterNodeManagerRequest.class);
+    request.setNodeId(nodeId);
+    resourceTracker.unRegisterNodeManager(request);
+  }
+
   public RegisterNodeManagerResponse registerNode() throws Exception {
     return registerNode(null, null);
   }
@@ -146,8 +166,7 @@ public class MockNM {
         RegisterNodeManagerRequest.class);
     req.setNodeId(nodeId);
     req.setHttpPort(httpPort);
-    Resource resource = BuilderUtils.newResource(memory, vCores);
-    req.setResource(resource);
+    req.setResource(capatibility);
     req.setContainerStatuses(containerReports);
     req.setNMVersion(version);
     req.setRunningApplications(runningApplications);
@@ -158,8 +177,7 @@ public class MockNM {
     this.currentNMTokenMasterKey = registrationResponse.getNMTokenMasterKey();
     Resource newResource = registrationResponse.getResource();
     if (newResource != null) {
-      memory = (int) newResource.getMemorySize();
-      vCores = newResource.getVirtualCores();
+      capatibility = Resources.clone(newResource);
     }
     containerStats.clear();
     if (containerReports != null) {
@@ -184,7 +202,7 @@ public class MockNM {
       long containerId, ContainerState containerState) throws Exception {
     ContainerStatus containerStatus = BuilderUtils.newContainerStatus(
         BuilderUtils.newContainerId(attemptId, containerId), containerState,
-        "Success", 0, BuilderUtils.newResource(memory, vCores));
+        "Success", 0, capatibility);
     ArrayList<ContainerStatus> containerStatusList =
         new ArrayList<ContainerStatus>(1);
     containerStatusList.add(containerStatus);
@@ -264,19 +282,22 @@ public class MockNM {
 
     Resource newResource = heartbeatResponse.getResource();
     if (newResource != null) {
-      memory = newResource.getMemorySize();
-      vCores = newResource.getVirtualCores();
+      capatibility = Resources.clone(newResource);
     }
 
     return heartbeatResponse;
   }
 
   public long getMemory() {
-    return memory;
+    return capatibility.getMemorySize();
   }
 
   public int getvCores() {
-    return vCores;
+    return capatibility.getVirtualCores();
+  }
+
+  public Resource getCapatibility() {
+    return capatibility;
   }
 
   public String getVersion() {

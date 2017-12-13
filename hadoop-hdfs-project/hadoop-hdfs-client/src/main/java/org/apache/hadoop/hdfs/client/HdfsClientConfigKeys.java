@@ -112,6 +112,10 @@ public interface HdfsClientConfigKeys {
   String  DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY =
       "dfs.client.max.block.acquire.failures";
   int     DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_DEFAULT = 3;
+  String  DFS_CLIENT_SERVER_DEFAULTS_VALIDITY_PERIOD_MS_KEY =
+      "dfs.client.server-defaults.validity.period.ms";
+  long    DFS_CLIENT_SERVER_DEFAULTS_VALIDITY_PERIOD_MS_DEFAULT =
+      TimeUnit.HOURS.toMillis(1);
   String  DFS_CHECKSUM_TYPE_KEY = "dfs.checksum.type";
   String  DFS_CHECKSUM_TYPE_DEFAULT = "CRC32C";
   String  DFS_BYTES_PER_CHECKSUM_KEY = "dfs.bytes-per-checksum";
@@ -320,6 +324,8 @@ public interface HdfsClientConfigKeys {
       String  POLICY_DEFAULT = "DEFAULT";
       String  BEST_EFFORT_KEY = PREFIX + "best-effort";
       boolean BEST_EFFORT_DEFAULT = false;
+      String MIN_REPLICATION = PREFIX + "min-replication";
+      short MIN_REPLICATION_DEFAULT = 0;
     }
   }
 

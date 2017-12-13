@@ -17,6 +17,7 @@
  */
 
 import DS from 'ember-data';
+import Converter from 'yarn-ui/utils/converter';
 
 export default DS.Model.extend({
   name: DS.attr('string'),
@@ -36,6 +37,7 @@ export default DS.Model.extend({
   numActiveApplications: DS.attr('number'),
   users: DS.hasMany('YarnUser'),
   type: DS.attr('string'),
+  resources: DS.attr('object'),
 
   isLeafQueue: function() {
     var len = this.get("children.length");
@@ -46,18 +48,22 @@ export default DS.Model.extend({
   }.property("children"),
 
   capacitiesBarChartData: function() {
+    var floatToFixed = Converter.floatToFixed;
     return [
       {
-        label: "Absolute Capacity",
-        value: this.get("name") === "root" ? 100 : this.get("absCapacity")
+        label: "Absolute Used",
+        style: "primary",
+        value: this.get("name") === "root" ? floatToFixed(this.get("usedCapacity")) : floatToFixed(this.get("absUsedCapacity"))
       },
       {
-        label: "Absolute Used",
-        value: this.get("name") === "root" ? this.get("usedCapacity") : this.get("absUsedCapacity")
+        label: "Absolute Capacity",
+        style: "primary",
+        value: this.get("name") === "root" ? 100 : floatToFixed(this.get("absCapacity"))
       },
       {
         label: "Absolute Max Capacity",
-        value: this.get("name") === "root" ? 100 : this.get("absMaxCapacity")
+        style: "secondary",
+        value: this.get("name") === "root" ? 100 : floatToFixed(this.get("absMaxCapacity"))
       }
     ];
   }.property("absCapacity", "usedCapacity", "absMaxCapacity"),
@@ -91,5 +97,5 @@ export default DS.Model.extend({
         value: this.get("numActiveApplications") || 0
       }
     ];
-  }.property("numPendingApplications", "numActiveApplications")
+  }.property("numPendingApplications", "numActiveApplications"),
 });

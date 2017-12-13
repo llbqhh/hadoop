@@ -20,6 +20,7 @@ package org.apache.hadoop.yarn.server.nodemanager.containermanager.monitor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import org.apache.hadoop.yarn.server.nodemanager.metrics.NodeManagerMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
@@ -38,6 +39,7 @@ import org.apache.hadoop.yarn.server.nodemanager.Context;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerImpl;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerKillEvent;
+import org.apache.hadoop.yarn.server.nodemanager.containermanager.runtime.ContainerExecutionException;
 import org.apache.hadoop.yarn.server.nodemanager.timelineservice.NMTimelinePublisher;
 import org.apache.hadoop.yarn.server.nodemanager.util.NodeManagerHardwareUtils;
 import org.apache.hadoop.yarn.util.ResourceCalculatorPlugin;
@@ -487,6 +489,18 @@ public class ContainersMonitorImpl extends AbstractService implements
         // Save the aggregated utilization of the containers
         setContainersUtilization(trackedContainersUtilization);
 
+        // Publish the container utilization metrics to node manager
+        // metrics system.
+        NodeManagerMetrics nmMetrics = context.getNodeManagerMetrics();
+        if (nmMetrics != null) {
+          nmMetrics.setContainerUsedMemGB(
+              trackedContainersUtilization.getPhysicalMemory());
+          nmMetrics.setContainerUsedVMemGB(
+              trackedContainersUtilization.getVirtualMemory());
+          nmMetrics.setContainerCpuUtilization(
+              trackedContainersUtilization.getCPU());
+        }
+
         try {
           Thread.sleep(monitoringInterval);
         } catch (InterruptedException e) {
@@ -502,7 +516,8 @@ public class ContainersMonitorImpl extends AbstractService implements
      * @param entry process tree entry to fill in
      */
     private void initializeProcessTrees(
-            Entry<ContainerId, ProcessTreeInfo> entry) {
+            Entry<ContainerId, ProcessTreeInfo> entry)
+        throws ContainerExecutionException {
       ContainerId containerId = entry.getKey();
       ProcessTreeInfo ptInfo = entry.getValue();
       String pId = ptInfo.getPID();

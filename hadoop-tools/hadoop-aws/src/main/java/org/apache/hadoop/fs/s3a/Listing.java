@@ -19,8 +19,6 @@
 package org.apache.hadoop.fs.s3a;
 
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.s3.model.ListObjectsRequest;
-import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.fs.FileStatus;
@@ -90,7 +88,7 @@ public class Listing {
    */
   FileStatusListingIterator createFileStatusListingIterator(
       Path listPath,
-      ListObjectsRequest request,
+      S3ListRequest request,
       PathFilter filter,
       Listing.FileStatusAcceptor acceptor) throws IOException {
     return createFileStatusListingIterator(listPath, request, filter, acceptor,
@@ -112,7 +110,7 @@ public class Listing {
    */
   FileStatusListingIterator createFileStatusListingIterator(
       Path listPath,
-      ListObjectsRequest request,
+      S3ListRequest request,
       PathFilter filter,
       Listing.FileStatusAcceptor acceptor,
       RemoteIterator<FileStatus> providedStatus) throws IOException {
@@ -387,8 +385,9 @@ public class Listing {
         status = statusBatchIterator.next();
         // We remove from provided list the file status listed by S3 so that
         // this does not return duplicate items.
-        LOG.debug("Removing the status from provided file status {}", status);
-        providedStatus.remove(status);
+        if (providedStatus.remove(status)) {
+          LOG.debug("Removed the status from provided file status {}", status);
+        }
       } else {
         if (providedStatusIterator.hasNext()) {
           status = providedStatusIterator.next();
@@ -432,7 +431,7 @@ public class Listing {
      * @param objects the next object listing
      * @return true if this added any entries after filtering
      */
-    private boolean buildNextStatusBatch(ObjectListing objects) {
+    private boolean buildNextStatusBatch(S3ListResult objects) {
       // counters for debug logs
       int added = 0, ignored = 0;
       // list to fill in with results. Initial size will be list maximum.
@@ -512,13 +511,16 @@ public class Listing {
    *
    * Thread safety: none.
    */
-  class ObjectListingIterator implements RemoteIterator<ObjectListing> {
+  class ObjectListingIterator implements RemoteIterator<S3ListResult> {
 
     /** The path listed. */
     private final Path listPath;
 
     /** The most recent listing results. */
-    private ObjectListing objects;
+    private S3ListResult objects;
+
+    /** The most recent listing request. */
+    private S3ListRequest request;
 
     /** Indicator that this is the first listing. */
     private boolean firstListing = true;
@@ -539,13 +541,15 @@ public class Listing {
      * initial set of results/fail if there was a problem talking to the bucket.
      * @param listPath path of the listing
      * @param request initial request to make
-     * */
+     * @throws IOException if listObjects raises one.
+     */
     ObjectListingIterator(
         Path listPath,
-        ListObjectsRequest request) {
+        S3ListRequest request) throws IOException {
       this.listPath = listPath;
       this.maxKeys = owner.getMaxKeys();
       this.objects = owner.listObjects(request);
+      this.request = request;
     }
 
     /**
@@ -569,7 +573,8 @@ public class Listing {
      * @throws NoSuchElementException if there is no more data to list.
      */
     @Override
-    public ObjectListing next() throws IOException {
+    @Retries.RetryTranslated
+    public S3ListResult next() throws IOException {
       if (firstListing) {
         // on the first listing, don't request more data.
         // Instead just clear the firstListing flag so that it future calls
@@ -585,7 +590,7 @@ public class Listing {
           // need to request a new set of objects.
           LOG.debug("[{}], Requesting next {} objects under {}",
               listingCount, maxKeys, listPath);
-          objects = owner.continueListObjects(objects);
+          objects = owner.continueListObjects(request, objects);
           listingCount++;
           LOG.debug("New listing status: {}", this);
         } catch (AmazonClientException e) {
@@ -811,20 +816,5 @@ public class Listing {
       return (status != null) && !status.getPath().equals(qualifiedPath);
     }
   }
-
-  /**
-   * A Path filter which accepts all filenames.
-   */
-  static final PathFilter ACCEPT_ALL = new PathFilter() {
-    @Override
-    public boolean accept(Path file) {
-      return true;
-    }
-
-    @Override
-    public String toString() {
-      return "ACCEPT_ALL";
-    }
-  };
 
 }

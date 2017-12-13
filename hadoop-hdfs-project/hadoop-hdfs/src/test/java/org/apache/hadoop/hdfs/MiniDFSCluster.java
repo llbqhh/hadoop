@@ -582,6 +582,14 @@ public class MiniDFSCluster implements AutoCloseable {
     public void setStartOpt(StartupOption startOpt) {
       this.startOpt = startOpt;
     }
+
+    public String getNameserviceId() {
+      return this.nameserviceId;
+    }
+
+    public String getNamenodeId() {
+      return this.nnId;
+    }
   }
   
   /**
@@ -3091,6 +3099,16 @@ public class MiniDFSCluster implements AutoCloseable {
 
     // Wait for new namenode to get registrations from all the datanodes
     waitActive(nnIndex);
+  }
+
+  /**
+   * Sets the timeout for re-issuing a block recovery.
+   */
+  public void setBlockRecoveryTimeout(long timeout) {
+    for (int nnIndex = 0; nnIndex < getNumNameNodes(); nnIndex++) {
+      getNamesystem(nnIndex).getBlockManager().setBlockRecoveryTimeout(
+          timeout);
+    }
   }
   
   protected void setupDatanodeAddress(Configuration conf, boolean setupHostsFile,

@@ -272,7 +272,7 @@ public interface YarnScheduler extends EventHandler<SchedulerEvent> {
    * @param newQueue the queue being added.
    * @throws YarnException
    */
-  void addQueue(Queue newQueue) throws YarnException;
+  void addQueue(Queue newQueue) throws YarnException, IOException;
 
   /**
    * This method increase the entitlement for current queue (must respect
@@ -385,4 +385,24 @@ public interface YarnScheduler extends EventHandler<SchedulerEvent> {
    * @return the normalized resource
    */
   Resource getNormalizedResource(Resource requestedResource);
+
+  /**
+   * Verify whether a submitted application lifetime is valid as per configured
+   * Queue lifetime.
+   * @param queueName Name of the Queue
+   * @param lifetime configured application lifetime
+   * @return valid lifetime as per queue
+   */
+  @Public
+  @Evolving
+  long checkAndGetApplicationLifetime(String queueName, long lifetime);
+
+  /**
+   * Get maximum lifetime for a queue.
+   * @param queueName to get lifetime
+   * @return maximum lifetime in seconds
+   */
+  @Public
+  @Evolving
+  long getMaximumApplicationLifetime(String queueName);
 }

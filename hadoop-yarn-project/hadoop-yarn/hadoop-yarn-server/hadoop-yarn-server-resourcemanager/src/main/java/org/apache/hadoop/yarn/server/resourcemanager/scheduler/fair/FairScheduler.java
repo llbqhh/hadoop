@@ -52,9 +52,9 @@ import org.apache.hadoop.yarn.security.YarnAuthorizationProvider;
 import org.apache.hadoop.yarn.server.api.protocolrecords.NMContainerStatus;
 import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
 import org.apache.hadoop.yarn.server.resourcemanager.RMCriticalThreadUncaughtExceptionHandler;
+import org.apache.hadoop.yarn.server.resourcemanager.monitor.SchedulingMonitorManager;
 import org.apache.hadoop.yarn.server.resourcemanager.recovery.RMStateStore.RMState;
 import org.apache.hadoop.yarn.server.resourcemanager.reservation.ReservationConstants;
-import org.apache.hadoop.yarn.server.resourcemanager.resource.ResourceWeights;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMApp;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.RMAppEventType;
@@ -151,23 +151,13 @@ public class FairScheduler extends
   // reserved
   public static final Resource CONTAINER_RESERVED = Resources.createResource(-1);
 
-  // How often fair shares are re-calculated (ms)
-  protected long updateInterval;
   private final int UPDATE_DEBUG_FREQUENCY = 25;
   private int updatesToSkipForDebug = UPDATE_DEBUG_FREQUENCY;
-
-  @VisibleForTesting
-  Thread updateThread;
-
-  private final Object updateThreadMonitor = new Object();
 
   @VisibleForTesting
   Thread schedulingThread;
 
   Thread preemptionThread;
-
-  // timeout to join when we stop this service
-  protected final long THREAD_JOIN_TIMEOUT_MS = 1000;
 
   // Aggregate metrics
   FSQueueMetrics rootMetrics;
@@ -188,7 +178,6 @@ public class FairScheduler extends
   protected double rackLocalityThreshold; // Cluster threshold for rack locality
   protected long nodeLocalityDelayMs; // Delay for node locality
   protected long rackLocalityDelayMs; // Delay for rack locality
-  private FairSchedulerEventLog eventLog; // Machine-readable event log
   protected boolean assignMultiple; // Allocate multiple containers per
                                     // heartbeat
   @VisibleForTesting
@@ -292,40 +281,6 @@ public class FairScheduler extends
     return queueMgr;
   }
 
-  // Allows UpdateThread to start processing without waiting till updateInterval
-  void triggerUpdate() {
-    synchronized (updateThreadMonitor) {
-      updateThreadMonitor.notify();
-    }
-  }
-
-  /**
-   * Thread which calls {@link FairScheduler#update()} every
-   * <code>updateInterval</code> milliseconds.
-   */
-  private class UpdateThread extends Thread {
-
-    @Override
-    public void run() {
-      while (!Thread.currentThread().isInterrupted()) {
-        try {
-          synchronized (updateThreadMonitor) {
-            updateThreadMonitor.wait(updateInterval);
-          }
-          long start = getClock().getTime();
-          update();
-          long duration = getClock().getTime() - start;
-          fsOpDurations.addUpdateThreadRunDuration(duration);
-        } catch (InterruptedException ie) {
-          LOG.warn("Update thread interrupted. Exiting.");
-          return;
-        } catch (Exception e) {
-          LOG.error("Exception in fair scheduler UpdateThread", e);
-        }
-      }
-    }
-  }
-
   /**
    * Thread which attempts scheduling resources continuously,
    * asynchronous to the node heartbeats.
@@ -367,7 +322,10 @@ public class FairScheduler extends
    * required resources per job.
    */
   @VisibleForTesting
+  @Override
   public void update() {
+    // Storing start time for fsOpDurations
+    long start = getClock().getTime();
     FSQueue rootQueue = queueMgr.getRootQueue();
 
     // Update demands and fairshares
@@ -402,6 +360,7 @@ public class FairScheduler extends
     } finally {
       readLock.unlock();
     }
+    fsOpDurations.addUpdateThreadRunDuration(getClock().getTime() - start);
   }
 
   public RMContainerTokenSecretManager
@@ -409,22 +368,8 @@ public class FairScheduler extends
     return rmContext.getContainerTokenSecretManager();
   }
 
-  public ResourceWeights getAppWeight(FSAppAttempt app) {
-    try {
-      readLock.lock();
-      double weight = 1.0;
-      if (sizeBasedWeight) {
-        // Set weight based on current memory demand
-        weight = Math.log1p(app.getDemand().getMemorySize()) / Math.log(2);
-      }
-      weight *= app.getPriority().getPriority();
-      ResourceWeights resourceWeights = app.getResourceWeights();
-      resourceWeights.setWeight((float) weight);
-      return resourceWeights;
-    } finally {
-      readLock.unlock();
-    }
-
+  public boolean isSizeBasedWeight() {
+    return sizeBasedWeight;
   }
 
   public Resource getIncrementResourceCapability() {
@@ -457,10 +402,6 @@ public class FairScheduler extends
 
   public int getContinuousSchedulingSleepMs() {
     return continuousSchedulingSleepMs;
-  }
-
-  public FairSchedulerEventLog getEventLog() {
-    return eventLog;
   }
 
   /**
@@ -828,6 +769,16 @@ public class FairScheduler extends
         incrAllocation);
   }
 
+  @VisibleForTesting
+  @Override
+  public void killContainer(RMContainer container) {
+    ContainerStatus status = SchedulerUtils.createKilledContainerStatus(
+        container.getContainerId(),
+        "Killed by RM to simulate an AM container failure");
+    LOG.info("Killing container " + container);
+    completedContainer(container, status, RMContainerEventType.KILL);
+  }
+
   @Override
   public Allocation allocate(ApplicationAttemptId appAttemptId,
       List<ResourceRequest> ask, List<ContainerId> release,
@@ -912,7 +863,8 @@ public class FairScheduler extends
         preemptionContainerIds, null, null,
         application.pullUpdatedNMTokens(), null, null,
         application.pullNewlyPromotedContainers(),
-        application.pullNewlyDemotedContainers());
+        application.pullNewlyDemotedContainers(),
+        application.pullPreviousAttemptContainers());
   }
 
   @Override
@@ -920,7 +872,6 @@ public class FairScheduler extends
     try {
       writeLock.lock();
       long start = getClock().getTime();
-      eventLog.log("HEARTBEAT", nm.getHostName());
       super.nodeUpdate(nm);
 
       FSSchedulerNode fsNode = getFSSchedulerNode(nm.getNodeID());
@@ -1298,8 +1249,8 @@ public class FairScheduler extends
       this.conf = new FairSchedulerConfiguration(conf);
       validateConf(this.conf);
       authorizer = YarnAuthorizationProvider.getInstance(conf);
-      minimumAllocation = this.conf.getMinimumAllocation();
-      initMaximumResourceCapability(this.conf.getMaximumAllocation());
+      minimumAllocation = super.getMinimumAllocation();
+      initMaximumResourceCapability(super.getMaximumAllocation());
       incrAllocation = this.conf.getIncrementAllocation();
       updateReservationThreshold();
       continuousSchedulingEnabled = this.conf.isContinuousSchedulingEnabled();
@@ -1320,7 +1271,7 @@ public class FairScheduler extends
         updateInterval = FairSchedulerConfiguration.DEFAULT_UPDATE_INTERVAL_MS;
         LOG.warn(FairSchedulerConfiguration.UPDATE_INTERVAL_MS
             + " is invalid, so using default value "
-            + +FairSchedulerConfiguration.DEFAULT_UPDATE_INTERVAL_MS
+            + FairSchedulerConfiguration.DEFAULT_UPDATE_INTERVAL_MS
             + " ms instead");
       }
 
@@ -1329,8 +1280,6 @@ public class FairScheduler extends
 
       // This stores per-application scheduling information
       this.applications = new ConcurrentHashMap<>();
-      this.eventLog = new FairSchedulerEventLog();
-      eventLog.init(this.conf);
 
       allocConf = new AllocationConfiguration(conf);
       try {
@@ -1338,12 +1287,6 @@ public class FairScheduler extends
       } catch (Exception e) {
         throw new IOException("Failed to start FairScheduler", e);
       }
-
-      updateThread = new UpdateThread();
-      updateThread.setName("FairSchedulerUpdateThread");
-      updateThread.setUncaughtExceptionHandler(
-          new RMCriticalThreadUncaughtExceptionHandler(rmContext));
-      updateThread.setDaemon(true);
 
       if (continuousSchedulingEnabled) {
         // start continuous scheduling thread
@@ -1391,9 +1334,7 @@ public class FairScheduler extends
   private void startSchedulerThreads() {
     try {
       writeLock.lock();
-      Preconditions.checkNotNull(updateThread, "updateThread is null");
       Preconditions.checkNotNull(allocsLoader, "allocsLoader is null");
-      updateThread.start();
       if (continuousSchedulingEnabled) {
         Preconditions.checkNotNull(schedulingThread,
             "schedulingThread is null");
@@ -1412,6 +1353,10 @@ public class FairScheduler extends
   public void serviceInit(Configuration conf) throws Exception {
     initScheduler(conf);
     super.serviceInit(conf);
+
+    // Initialize SchedulingMonitorManager
+    schedulingMonitorManager = new SchedulingMonitorManager();
+    schedulingMonitorManager.initialize(rmContext, conf);
   }
 
   @Override
@@ -1424,10 +1369,6 @@ public class FairScheduler extends
   public void serviceStop() throws Exception {
     try {
       writeLock.lock();
-      if (updateThread != null) {
-        updateThread.interrupt();
-        updateThread.join(THREAD_JOIN_TIMEOUT_MS);
-      }
       if (continuousSchedulingEnabled) {
         if (schedulingThread != null) {
           schedulingThread.interrupt();
@@ -1453,6 +1394,7 @@ public class FairScheduler extends
       throws IOException {
     try {
       allocsLoader.reloadAllocations();
+      super.reinitialize(conf, rmContext);
     } catch (Exception e) {
       LOG.error("Failed to reload allocations file", e);
     }
@@ -1570,7 +1512,8 @@ public class FairScheduler extends
       if ((queue.getParent() != null) &&
           !configuredLeafQueues.contains(queue.getName()) &&
           !configuredParentQueues.contains(queue.getName())) {
-        Resource max = queue.getParent().getMaxChildQueueResource();
+        ConfigurableResource max = queue.getParent().
+            getMaxChildQueueResource();
 
         if (max != null) {
           queue.setMaxShare(max);
@@ -1852,5 +1795,11 @@ public class FairScheduler extends
 
   ReadLock getSchedulerReadLock() {
     return this.readLock;
+  }
+
+  @Override
+  public long checkAndGetApplicationLifetime(String queueName, long lifetime) {
+    // Lifetime is the application lifetime by default.
+    return lifetime;
   }
 }

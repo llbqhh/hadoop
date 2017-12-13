@@ -18,7 +18,8 @@
 
 package org.apache.hadoop.fs.s3a;
 
-import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.ListObjectsV2Request;
+import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.AmazonS3;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -51,6 +52,16 @@ import static org.apache.hadoop.fs.s3a.InconsistentAmazonS3Client.*;
  * 2. Only run when S3Guard is enabled.
  */
 public class ITestS3GuardListConsistency extends AbstractS3ATestBase {
+
+  private Invoker invoker;
+
+  @Override
+  public void setup() throws Exception {
+    super.setup();
+    invoker = new Invoker(new S3ARetryPolicy(getConfiguration()),
+        Invoker.NO_OP
+    );
+  }
 
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
@@ -435,16 +446,16 @@ public class ITestS3GuardListConsistency extends AbstractS3ATestBase {
     // files to list are delaying visibility
     if (!recursive) {
       // in this case only the top level files are listed
+      verifyFileIsListed(listedFiles, baseTestDir, fileNames);
       assertEquals("Unexpected number of files returned by listFiles() call",
           normalFileNum + delayedFileNum, listedFiles.size());
-      verifyFileIsListed(listedFiles, baseTestDir, fileNames);
     } else {
-      assertEquals("Unexpected number of files returned by listFiles() call",
-          filesAndEmptyDirectories,
-          listedFiles.size());
       for (Path dir : testDirs) {
         verifyFileIsListed(listedFiles, dir, fileNames);
       }
+      assertEquals("Unexpected number of files returned by listFiles() call",
+          filesAndEmptyDirectories,
+          listedFiles.size());
     }
   }
 
@@ -488,6 +499,10 @@ public class ITestS3GuardListConsistency extends AbstractS3ATestBase {
 
   @Test
   public void testInconsistentS3ClientDeletes() throws Throwable {
+    // Test only implemented for v2 S3 list API
+    Assume.assumeTrue(getConfiguration()
+        .getInt(LIST_VERSION, DEFAULT_LIST_VERSION) == 2);
+
     S3AFileSystem fs = getFileSystem();
     Path root = path("testInconsistentClient" + DEFAULT_DELAY_KEY_SUBSTRING);
     for (int i = 0; i < 3; i++) {
@@ -499,20 +514,15 @@ public class ITestS3GuardListConsistency extends AbstractS3ATestBase {
     }
     clearInconsistency(fs);
 
-    AmazonS3 client = fs.getAmazonS3Client();
     String key = fs.pathToKey(root) + "/";
 
-    ObjectListing preDeleteDelimited = client.listObjects(
-        fs.createListObjectsRequest(key, "/"));
-    ObjectListing preDeleteUndelimited = client.listObjects(
-        fs.createListObjectsRequest(key, null));
+    ListObjectsV2Result preDeleteDelimited = listObjectsV2(fs, key, "/");
+    ListObjectsV2Result preDeleteUndelimited = listObjectsV2(fs, key, null);
 
     fs.delete(root, true);
 
-    ObjectListing postDeleteDelimited = client.listObjects(
-        fs.createListObjectsRequest(key, "/"));
-    ObjectListing postDeleteUndelimited = client.listObjects(
-        fs.createListObjectsRequest(key, null));
+    ListObjectsV2Result postDeleteDelimited = listObjectsV2(fs, key, "/");
+    ListObjectsV2Result postDeleteUndelimited = listObjectsV2(fs, key, null);
 
     assertEquals("InconsistentAmazonS3Client added back objects incorrectly " +
             "in a non-recursive listing",
@@ -536,8 +546,27 @@ public class ITestS3GuardListConsistency extends AbstractS3ATestBase {
     );
   }
 
+  /**
+   * retrying v2 list.
+   * @param fs
+   * @param key
+   * @param delimiter
+   * @return
+   * @throws IOException
+   */
+
+  private ListObjectsV2Result listObjectsV2(S3AFileSystem fs,
+      String key, String delimiter) throws java.io.IOException {
+    ListObjectsV2Request k = fs.createListObjectsRequest(key, delimiter)
+        .getV2();
+    return invoker.retryUntranslated("list", true,
+        () -> {
+          return fs.getAmazonS3ClientForTesting("list").listObjectsV2(k);
+        });
+  }
+
   private static void clearInconsistency(S3AFileSystem fs) throws Exception {
-    AmazonS3 s3 = fs.getAmazonS3Client();
+    AmazonS3 s3 = fs.getAmazonS3ClientForTesting("s3guard");
     InconsistentAmazonS3Client ic = InconsistentAmazonS3Client.castFrom(s3);
     ic.clearInconsistency();
   }

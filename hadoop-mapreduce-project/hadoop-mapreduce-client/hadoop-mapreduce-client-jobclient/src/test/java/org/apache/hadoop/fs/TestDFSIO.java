@@ -33,14 +33,13 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.Random;
 import java.util.StringTokenizer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.protocol.BlockStoragePolicy;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.CompressionType;
@@ -61,6 +60,8 @@ import org.apache.hadoop.util.ToolRunner;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Distributed i/o benchmark.
@@ -91,7 +92,7 @@ import org.junit.Test;
  */
 public class TestDFSIO implements Tool {
   // Constants
-  private static final Log LOG = LogFactory.getLog(TestDFSIO.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TestDFSIO.class);
   private static final int DEFAULT_BUFFER_SIZE = 1000000;
   private static final String BASE_FILE_NAME = "test_io_";
   private static final String DEFAULT_RES_FILE_NAME = "TestDFSIO_results.log";
@@ -925,11 +926,11 @@ public class TestDFSIO implements Tool {
 
   private boolean checkErasureCodePolicy(String erasureCodePolicyName,
       FileSystem fs, TestType testType) throws IOException {
-    Collection<ErasureCodingPolicy> list =
+    Collection<ErasureCodingPolicyInfo> list =
         ((DistributedFileSystem) fs).getAllErasureCodingPolicies();
     boolean isValid = false;
-    for (ErasureCodingPolicy ec : list) {
-      if (erasureCodePolicyName.equals(ec.getName())) {
+    for (ErasureCodingPolicyInfo ec : list) {
+      if (erasureCodePolicyName.equals(ec.getPolicy().getName())) {
         isValid = true;
         break;
       }
@@ -939,8 +940,8 @@ public class TestDFSIO implements Tool {
       System.out.println("Invalid erasure code policy: " +
           erasureCodePolicyName);
       System.out.println("Current supported erasure code policy list: ");
-      for (ErasureCodingPolicy ec : list) {
-        System.out.println(ec.getName());
+      for (ErasureCodingPolicyInfo ec : list) {
+        System.out.println(ec.getPolicy().getName());
       }
       return false;
     }
@@ -999,9 +1000,10 @@ public class TestDFSIO implements Tool {
         getConf().get(ERASURE_CODE_POLICY_NAME_KEY, null);
 
     fs.mkdirs(path);
-    Collection<ErasureCodingPolicy> list =
+    Collection<ErasureCodingPolicyInfo> list =
         ((DistributedFileSystem) fs).getAllErasureCodingPolicies();
-    for (ErasureCodingPolicy ec : list) {
+    for (ErasureCodingPolicyInfo info : list) {
+      final ErasureCodingPolicy ec = info.getPolicy();
       if (erasureCodePolicyName.equals(ec.getName())) {
         ((DistributedFileSystem) fs).setErasureCodingPolicy(path, ec.getName());
         LOG.info("enable erasureCodePolicy = " + erasureCodePolicyName  +

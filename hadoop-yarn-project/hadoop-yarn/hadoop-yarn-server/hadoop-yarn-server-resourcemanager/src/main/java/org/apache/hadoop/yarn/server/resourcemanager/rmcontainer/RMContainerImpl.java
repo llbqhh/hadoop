@@ -25,7 +25,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
-import org.apache.commons.lang.time.DateUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
@@ -35,6 +34,7 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.ContainerReport;
 import org.apache.hadoop.yarn.api.records.ContainerState;
 import org.apache.hadoop.yarn.api.records.ContainerStatus;
+import org.apache.hadoop.yarn.api.records.ContainerUpdateType;
 import org.apache.hadoop.yarn.api.records.ExecutionType;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.Priority;
@@ -52,6 +52,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.RMAppAttemptE
 import org.apache.hadoop.yarn.server.resourcemanager.rmapp.attempt.event.RMAppAttemptContainerFinishedEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeCleanContainerEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeUpdateContainerEvent;
+import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.ContainerRequest;
 import org.apache.hadoop.yarn.server.scheduler.SchedulerRequestKey;
 import org.apache.hadoop.yarn.state.InvalidStateTransitionException;
 import org.apache.hadoop.yarn.state.MultipleArcTransition;
@@ -178,7 +179,7 @@ public class RMContainerImpl implements RMContainer {
   private long finishTime;
   private ContainerStatus finishedStatus;
   private boolean isAMContainer;
-  private List<ResourceRequest> resourceRequests;
+  private ContainerRequest containerRequestForRecovery;
 
   // Only used for container resource increase and decrease. This is the
   // resource to rollback to should container resource increase token expires.
@@ -233,7 +234,6 @@ public class RMContainerImpl implements RMContainer {
     this.eventHandler = rmContext.getDispatcher().getEventHandler();
     this.containerAllocationExpirer = rmContext.getContainerAllocationExpirer();
     this.isAMContainer = false;
-    this.resourceRequests = null;
     this.nodeLabelExpression = nodeLabelExpression;
     this.lastConfirmedResource = container.getResource();
     this.isExternallyAllocated = isExternallyAllocated;
@@ -412,21 +412,21 @@ public class RMContainerImpl implements RMContainer {
       readLock.unlock();
     }
   }
-  
+
   @Override
-  public List<ResourceRequest> getResourceRequests() {
+  public ContainerRequest getContainerRequest() {
     try {
       readLock.lock();
-      return resourceRequests;
+      return containerRequestForRecovery;
     } finally {
       readLock.unlock();
     }
   }
-  
-  public void setResourceRequests(List<ResourceRequest> requests) {
+
+  public void setContainerRequest(ContainerRequest request) {
+    writeLock.lock();
     try {
-      writeLock.lock();
-      this.resourceRequests = requests;
+      this.containerRequestForRecovery = request;
     } finally {
       writeLock.unlock();
     }
@@ -576,7 +576,7 @@ public class RMContainerImpl implements RMContainer {
     public void transition(RMContainerImpl container, RMContainerEvent event) {
       // Clear ResourceRequest stored in RMContainer, we don't need to remember
       // this anymore.
-      container.setResourceRequests(null);
+      container.setContainerRequest(null);
       
       // Register with containerAllocationExpirer.
       container.containerAllocationExpirer.register(
@@ -641,7 +641,8 @@ public class RMContainerImpl implements RMContainer {
             new AllocationExpirationInfo(event.getContainerId()));
         container.eventHandler.handle(new RMNodeUpdateContainerEvent(
             container.nodeId,
-            Collections.singletonList(container.getContainer())));
+            Collections.singletonMap(container.getContainer(),
+                ContainerUpdateType.DECREASE_RESOURCE)));
       } else if (Resources.fitsIn(nmContainerResource, rmContainerResource)) {
         // If nmContainerResource < rmContainerResource, this is caused by the
         // following sequence:
@@ -713,20 +714,15 @@ public class RMContainerImpl implements RMContainer {
 
       if (rmAttempt != null) {
         long usedMillis = container.finishTime - container.creationTime;
-        long memorySeconds = resource.getMemorySize()
-                              * usedMillis / DateUtils.MILLIS_PER_SECOND;
-        long vcoreSeconds = resource.getVirtualCores()
-                             * usedMillis / DateUtils.MILLIS_PER_SECOND;
         rmAttempt.getRMAppAttemptMetrics()
-                  .updateAggregateAppResourceUsage(memorySeconds,vcoreSeconds);
+            .updateAggregateAppResourceUsage(resource, usedMillis);
         // If this is a preempted container, update preemption metrics
         if (ContainerExitStatus.PREEMPTED == container.finishedStatus
-                .getExitStatus()) {
-          rmAttempt.getRMAppAttemptMetrics().updatePreemptionInfo(resource,
-                  container);
+            .getExitStatus()) {
           rmAttempt.getRMAppAttemptMetrics()
-                  .updateAggregatePreemptedAppResourceUsage(memorySeconds,
-                          vcoreSeconds);
+              .updatePreemptionInfo(resource, container);
+          rmAttempt.getRMAppAttemptMetrics()
+              .updateAggregatePreemptedAppResourceUsage(resource, usedMillis);
         }
       }
     }
@@ -760,7 +756,7 @@ public class RMContainerImpl implements RMContainer {
           this.getAllocatedSchedulerKey().getPriority(), this.getCreationTime(),
           this.getFinishTime(), this.getDiagnosticsInfo(), this.getLogURL(),
           this.getContainerExitStatus(), this.getContainerState(),
-          this.getNodeHttpAddress());
+          this.getNodeHttpAddress(), this.getExecutionType());
     } finally {
       this.readLock.unlock();
     }
