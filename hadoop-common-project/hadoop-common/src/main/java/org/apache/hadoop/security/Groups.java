@@ -74,6 +74,7 @@ public class Groups {
   }
 
   public Groups(Configuration conf, final Timer timer) {
+    //默认使用ShellBasedUnixGroupsMapping，即底层操作系统的用户-组体系。如果需要定制，需要自己实现GroupMappingServiceProvider方法
     impl = 
       ReflectionUtils.newInstance(
           conf.getClass(CommonConfigurationKeys.HADOOP_SECURITY_GROUP_MAPPING, 

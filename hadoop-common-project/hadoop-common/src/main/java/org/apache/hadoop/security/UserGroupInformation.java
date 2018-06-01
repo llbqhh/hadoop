@@ -1513,6 +1513,7 @@ public class UserGroupInformation {
   public synchronized String[] getGroupNames() {
     ensureInitialized();
     try {
+      //namenode端取得用户组信息时调用
       Set<String> result = new LinkedHashSet<String>
         (groups.getGroups(getShortUserName()));
       return result.toArray(new String[result.size()]);

@@ -81,6 +81,7 @@ public class ShellBasedUnixGroupsMapping
   private static List<String> getUnixGroups(final String user) throws IOException {
     String result = "";
     try {
+      //直接调用底层操作的groups方法
       result = Shell.execCommand(Shell.getGroupsForUserCommand(user));
     } catch (ExitCodeException e) {
       // if we didn't get the group - just return empty list;
