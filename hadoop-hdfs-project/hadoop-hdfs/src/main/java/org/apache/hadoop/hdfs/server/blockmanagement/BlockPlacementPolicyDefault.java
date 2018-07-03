@@ -749,21 +749,28 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
                                List<DatanodeStorageInfo> results,
                                boolean avoidStaleNodes,
                                StorageType requiredStorageType) {
+    // 有几种情况会导致节点不可被选择用来存储数据
+
+    // 1、存储类型不匹配  DIST,SSD等
     if (storage.getStorageType() != requiredStorageType) {
       logNodeIsNotChosen(storage, "storage types do not match,"
           + " where the required storage type is " + requiredStorageType);
       return false;
     }
+
+    // 2、storage状态为只读
     if (storage.getState() == State.READ_ONLY_SHARED) {
       logNodeIsNotChosen(storage, "storage is read-only");
       return false;
     }
 
+    // 3、storage状态为失败
     if (storage.getState() == State.FAILED) {
       logNodeIsNotChosen(storage, "storage has failed");
       return false;
     }
 
+    // 4、节点状态为decommissioned（下线不再提供服务）
     DatanodeDescriptor node = storage.getDatanodeDescriptor();
     // check if the node is (being) decommissioned
     if (node.isDecommissionInProgress() || node.isDecommissioned()) {
@@ -771,13 +778,15 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       return false;
     }
 
+    // 5、节点长时间未发送心跳到namenode
     if (avoidStaleNodes) {
       if (node.isStale(this.staleInterval)) {
         logNodeIsNotChosen(storage, "the node is stale ");
         return false;
       }
     }
-    
+
+    // 6、节点存储空间不足
     final long requiredSize = blockSize * HdfsConstants.MIN_BLOCKS_FOR_WRITE;
     final long scheduledSize = blockSize * node.getBlocksScheduled(storage.getStorageType());
     final long remaining =
@@ -791,6 +800,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       return false;
     }
 
+    // 7、节点繁忙（节点负载大于集群平均写数据块负载的两倍）
     // check the communication traffic of the target machine
     if (considerLoad) {
       final double maxLoad = 2.0 * stats.getInServiceXceiverAverage();
@@ -801,7 +811,8 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         return false;
       }
     }
-      
+
+    // 8、同一机架选择的datanodee节点过多
     // check if the target rack has chosen too many nodes
     String rackname = node.getNetworkLocation();
     int counter=1;
