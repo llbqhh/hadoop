@@ -3,7 +3,6 @@ package org.apache.hadoop.security.provider;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.security.GroupMappingServiceProvider;
-import org.apache.hadoop.security.ShellBasedUnixGroupsMapping;
 
 import java.io.IOException;
 import java.util.*;
