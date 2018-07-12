@@ -122,6 +122,12 @@ public class TestNodeFencer {
   }
 
   @Test
+  public void testShortNameShellAndSsh() throws BadFencingConfigurationException {
+    NodeFencer fencer = setupFencer("sshfence\n" + getFencerTrueCommand()+"\n");
+    assertTrue(fencer.fence(MOCK_TARGET));
+  }
+
+  @Test
   public void testShortNameSshWithUser() throws BadFencingConfigurationException {
     NodeFencer fencer = setupFencer("sshfence(user)");
     assertFalse(fencer.fence(MOCK_TARGET));
