@@ -132,6 +132,8 @@ public class QueuePlacementPolicy {
         FairSchedulerConfiguration.USER_AS_DEFAULT_QUEUE,
         FairSchedulerConfiguration.DEFAULT_USER_AS_DEFAULT_QUEUE);
     List<QueuePlacementRule> rules = new ArrayList<QueuePlacementRule>();
+    // 默认顺序为Specified－User－Default
+    // create参数标志如果没有该队列，是否为其创建队列
     rules.add(new QueuePlacementRule.Specified().initialize(create, null));
     if (userAsDefaultQueue) {
       rules.add(new QueuePlacementRule.User().initialize(create, null));
@@ -163,6 +165,7 @@ public class QueuePlacementPolicy {
    */
   public String assignAppToQueue(String requestedQueue, String user)
       throws IOException {
+    //　遍历QueuePlacementRule，只要有一个符合就返回，默认情况下，遍历顺序为
     for (QueuePlacementRule rule : rules) {
       String queue = rule.assignAppToQueue(requestedQueue, user, groups,
           configuredQueues);

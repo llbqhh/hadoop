@@ -67,8 +67,10 @@ public abstract class QueuePlacementRule {
   public String assignAppToQueue(String requestedQueue, String user,
       Groups groups, Map<FSQueueType, Set<String>> configuredQueues)
       throws IOException {
+    //　这里取得队,默认顺序为Specified－User－Default
    String queue = getQueueForApp(requestedQueue, user, groups,
         configuredQueues);
+   // 如果create参数可以创建队列，或者已有队列中存在指定的队列，则返回队列名
     if (create || configuredQueues.get(FSQueueType.LEAF).contains(queue)
         || configuredQueues.get(FSQueueType.PARENT).contains(queue)) {
       return queue;
