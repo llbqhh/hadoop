@@ -173,10 +173,12 @@ public class NameNodeProxies {
   
     if (failoverProxyProvider == null) {
       // Non-HA case
+      // 非ha模式
       return createNonHAProxy(conf, NameNode.getAddress(nameNodeUri), xface,
           UserGroupInformation.getCurrentUser(), true, fallbackToSimpleAuth);
     } else {
       // HA case
+      // ha模式
       Conf config = new Conf(conf);
       T proxy = (T) RetryProxy.create(xface, failoverProxyProvider,
           RetryPolicies.failoverOnNetworkException(
@@ -310,6 +312,7 @@ public class NameNodeProxies {
     Text dtService = SecurityUtil.buildTokenService(nnAddr);
   
     T proxy;
+    // 当xface为ClientProtocol时生成ClientNamenodeProtocolPB
     if (xface == ClientProtocol.class) {
       proxy = (T) createNNProxyWithClientProtocol(nnAddr, conf, ugi,
           withRetries, fallbackToSimpleAuth);
@@ -403,6 +406,8 @@ public class NameNodeProxies {
       InetSocketAddress address, Configuration conf, UserGroupInformation ugi,
       boolean withRetries, AtomicBoolean fallbackToSimpleAuth)
       throws IOException {
+    // 这里set的protocolEngin会在下面的getProtocolProxy方法内部用到
+    // 会将name和类的对应关系set到hadoop conf中
     RPC.setProtocolEngine(conf, ClientNamenodeProtocolPB.class, ProtobufRpcEngine.class);
 
     final RetryPolicy defaultPolicy = 
@@ -415,6 +420,7 @@ public class NameNodeProxies {
             SafeModeException.class);
     
     final long version = RPC.getProtocolVersion(ClientNamenodeProtocolPB.class);
+    // 构造ClientNamenodeProtocolPB
     ClientNamenodeProtocolPB proxy = RPC.getProtocolProxy(
         ClientNamenodeProtocolPB.class, version, address, ugi, conf,
         NetUtils.getDefaultSocketFactory(conf),
@@ -425,9 +431,11 @@ public class NameNodeProxies {
 
       Map<String, RetryPolicy> methodNameToPolicyMap 
                  = new HashMap<String, RetryPolicy>();
-    
+
+      // 构造ClientNamenodeProtocolTranslatorPB，会持有proxy即ClientNamenodeProtocolPB
       ClientProtocol translatorProxy =
         new ClientNamenodeProtocolTranslatorPB(proxy);
+      // 返回ClientNamenodeProtocolTranslatorPB
       return (ClientProtocol) RetryProxy.create(
           ClientProtocol.class,
           new DefaultFailoverProxyProvider<ClientProtocol>(

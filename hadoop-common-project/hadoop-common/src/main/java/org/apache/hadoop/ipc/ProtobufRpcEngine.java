@@ -100,8 +100,10 @@ public class ProtobufRpcEngine implements RpcEngine {
       SocketFactory factory, int rpcTimeout, RetryPolicy connectionRetryPolicy,
       AtomicBoolean fallbackToSimpleAuth) throws IOException {
 
+    // 构造InvocationHandler对象，即本类中的Invoker，后续会有它代理请求
     final Invoker invoker = new Invoker(protocol, addr, ticket, conf, factory,
         rpcTimeout, connectionRetryPolicy, fallbackToSimpleAuth);
+    // 通过Proxy.newProxyInstance创建实例，包装在ProtocolProxy中
     return new ProtocolProxy<T>(protocol, (T) Proxy.newProxyInstance(
         protocol.getClassLoader(), new Class[]{protocol}, invoker), false);
   }
@@ -196,7 +198,8 @@ public class ProtobufRpcEngine implements RpcEngine {
       if (LOG.isDebugEnabled()) {
         startTime = Time.now();
       }
-      
+
+      // RPC接口的参数只能有两个，RpcController和Message（真正的参数）
       if (args.length != 2) { // RpcController + Message
         throw new ServiceException("Too many parameters for request. Method: ["
             + method.getName() + "]" + ", Expected: 2, Actual: "
@@ -217,6 +220,7 @@ public class ProtobufRpcEngine implements RpcEngine {
             "." + method.getName());
       }
 
+      // 构造请求头，记录调用是什么接口的什么方法
       RequestHeaderProto rpcRequestHeader = constructRpcRequestHeader(method);
       
       if (LOG.isTraceEnabled()) {
@@ -225,10 +229,11 @@ public class ProtobufRpcEngine implements RpcEngine {
             " {" + TextFormat.shortDebugString((Message) args[1]) + "}");
       }
 
-
+      // 获取请求调用的参数
       Message theRequest = (Message) args[1];
       final RpcResponseWrapper val;
       try {
+        // 调用client.call发送请求
         val = (RpcResponseWrapper) client.call(RPC.RpcKind.RPC_PROTOCOL_BUFFER,
             new RpcRequestWrapper(rpcRequestHeader, theRequest), remoteId,
             fallbackToSimpleAuth);
@@ -255,12 +260,14 @@ public class ProtobufRpcEngine implements RpcEngine {
       
       Message prototype = null;
       try {
+        // 获取返回参数类型
         prototype = getReturnProtoType(method);
       } catch (Exception e) {
         throw new ServiceException(e);
       }
       Message returnMessage;
       try {
+        // 序列化调用返回信息，并返回
         returnMessage = prototype.newBuilderForType()
             .mergeFrom(val.theResponseRead).build();
 

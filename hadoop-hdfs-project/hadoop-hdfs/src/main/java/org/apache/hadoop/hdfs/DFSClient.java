@@ -665,9 +665,11 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     } else {
       Preconditions.checkArgument(nameNodeUri != null,
           "null URI");
+      // 创建proxyInfo饮用
       proxyInfo = NameNodeProxies.createProxy(conf, nameNodeUri,
           ClientProtocol.class, nnFallbackToSimpleAuth);
       this.dtService = proxyInfo.getDelegationTokenService();
+      // 获取namenode实例
       this.namenode = proxyInfo.getProxy();
     }
 

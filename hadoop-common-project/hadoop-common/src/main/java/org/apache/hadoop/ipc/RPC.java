@@ -199,7 +199,9 @@ public class RPC {
   // return the RpcEngine configured to handle a protocol
   static synchronized RpcEngine getProtocolEngine(Class<?> protocol,
       Configuration conf) {
+    // 已经创建过的就缓存在hashmap中
     RpcEngine engine = PROTOCOL_ENGINES.get(protocol);
+    // 通过反射创建rpcEngine实例
     if (engine == null) {
       Class<?> impl = conf.getClass(ENGINE_PROP+"."+protocol.getName(),
                                     WritableRpcEngine.class);
@@ -540,6 +542,7 @@ public class RPC {
   /**
    * Get a protocol proxy that contains a proxy connection to a remote server
    * and a set of methods that are supported by the server
+   * 获取RPC接口的代理对象
    *
    * @param protocol protocol
    * @param clientVersion client's version
@@ -567,6 +570,8 @@ public class RPC {
     if (UserGroupInformation.isSecurityEnabled()) {
       SaslRpcServer.init(conf);
     }
+    // 先获取protocolEngine
+     // 再调用getProxy
     return getProtocolEngine(protocol, conf).getProxy(protocol, clientVersion,
         addr, ticket, conf, factory, rpcTimeout, connectionRetryPolicy,
         fallbackToSimpleAuth);
