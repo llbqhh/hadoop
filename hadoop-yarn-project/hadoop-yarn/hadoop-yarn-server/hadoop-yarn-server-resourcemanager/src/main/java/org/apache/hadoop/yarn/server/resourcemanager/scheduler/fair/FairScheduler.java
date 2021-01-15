@@ -585,6 +585,7 @@ public class FairScheduler extends
     }
 
     RMApp rmApp = rmContext.getRMApps().get(applicationId);
+    // 提交到指定队列
     FSLeafQueue queue = assignToQueue(rmApp, queueName, user);
     if (queue == null) {
       return;
@@ -679,6 +680,7 @@ public class FairScheduler extends
 
     try {
       QueuePlacementPolicy placementPolicy = allocConf.getPlacementPolicy();
+      //　取得要提交队列名（可能抛出异常）
       queueName = placementPolicy.assignAppToQueue(queueName, user);
       if (queueName == null) {
         appRejectMsg = "Application rejected by queue placement policy";
@@ -1132,6 +1134,7 @@ public class FairScheduler extends
       nodeUpdate(nodeUpdatedEvent.getRMNode());
       break;
     case APP_ADDED:
+      // 添加app到指定执行队列中
       if (!(event instanceof AppAddedSchedulerEvent)) {
         throw new RuntimeException("Unexpected event type: " + event);
       }

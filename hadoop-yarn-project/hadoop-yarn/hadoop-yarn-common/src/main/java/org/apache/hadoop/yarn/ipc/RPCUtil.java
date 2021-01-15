@@ -45,14 +45,14 @@ public class RPCUtil {
     return new YarnException(message);
   }
 
-  private static <T extends Throwable> T instantiateException(
+  private static <T extends Throwable> YarnException instantiateException(
       Class<? extends T> cls, RemoteException re) throws RemoteException {
     try {
       Constructor<? extends T> cn = cls.getConstructor(String.class);
       cn.setAccessible(true);
       T ex = cn.newInstance(re.getMessage());
       ex.initCause(re);
-      return ex;
+      return new YarnException(ex);
       // RemoteException contains useful information as against the
       // java.lang.reflect exceptions.
     } catch (NoSuchMethodException e) {

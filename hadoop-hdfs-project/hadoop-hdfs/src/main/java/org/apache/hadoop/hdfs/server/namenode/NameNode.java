@@ -758,6 +758,7 @@ public class NameNode implements NameNodeStatusMXBean {
       throws IOException { 
     this.conf = conf;
     this.role = role;
+    //设置client调用这个namenode时需要访问的hdfs地址，例如hdfs://ns1,则clien端调用时应该连接ns1
     setClientNamenodeAddress(conf);
     String nsId = getNameServiceId(conf);
     String namenodeId = HAUtil.getNameNodeId(conf, nsId);

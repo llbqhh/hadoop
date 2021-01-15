@@ -1,0 +1,2 @@
+增加snappy
+mvn install -DskipTests -Pdist,native -Dtar -Dmaven.javadoc.skip=true -Drequire.snappy
