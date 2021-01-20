@@ -99,10 +99,12 @@ public class RetryInvocationHandler<T> implements RpcInvocationHandler {
         Client.setCallIdAndRetryCount(callId, retries);
       }
       try {
+        // 反射调用代理对象的方法
         Object ret = invokeMethod(method, args);
         hasMadeASuccessfulCall = true;
         return ret;
       } catch (Exception e) {
+        // 判断方法是不是幂等的
         boolean isIdempotentOrAtMostOnce = proxyProvider.getInterface()
             .getMethod(method.getName(), method.getParameterTypes())
             .isAnnotationPresent(Idempotent.class);
@@ -111,6 +113,12 @@ public class RetryInvocationHandler<T> implements RpcInvocationHandler {
               .getMethod(method.getName(), method.getParameterTypes())
               .isAnnotationPresent(AtMostOnce.class);
         }
+        // 分析需要进行的retry动作
+        // 用FailoverOnNetworkExceptionRetry举例子
+        // 重试次数过多=》RetryDecision.FAIL
+        // 连接active namenode相关问题=》RetryDecision.FAILOVER_AND_RETRY
+        // 可重试错误=》RetryDecision.RETRY
+        // 底层socket、io错误=》幂等方法FAILOVER_AND_RETRY，否则FAIL
         RetryAction action = policy.shouldRetry(e, retries++,
             invocationFailoverCount, isIdempotentOrAtMostOnce);
         if (action.action == RetryAction.RetryDecision.FAIL) {
@@ -156,12 +164,14 @@ public class RetryInvocationHandler<T> implements RpcInvocationHandler {
             // single actual fail over.
             synchronized (proxyProvider) {
               if (invocationAttemptFailoverCount == proxyProviderFailoverCount) {
+                // 进行failover
                 proxyProvider.performFailover(currentProxy.proxy);
                 proxyProviderFailoverCount++;
               } else {
                 LOG.warn("A failover has occurred since the start of this method"
                     + " invocation attempt.");
               }
+              // 获得最新的proxy对象
               currentProxy = proxyProvider.getProxy();
             }
             invocationFailoverCount++;
@@ -184,6 +194,7 @@ public class RetryInvocationHandler<T> implements RpcInvocationHandler {
       if (!method.isAccessible()) {
         method.setAccessible(true);
       }
+      // 用反射调用currentProxy的方法
       return method.invoke(currentProxy.proxy, args);
     } catch (InvocationTargetException e) {
       throw e.getCause();
