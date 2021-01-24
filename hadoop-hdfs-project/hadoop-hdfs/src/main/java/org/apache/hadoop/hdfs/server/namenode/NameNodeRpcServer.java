@@ -213,20 +213,31 @@ class NameNodeRpcServer implements NamenodeProtocols {
       conf.getInt(DFS_NAMENODE_HANDLER_COUNT_KEY, 
                   DFS_NAMENODE_HANDLER_COUNT_DEFAULT);
 
+    // 设置protocol
     RPC.setProtocolEngine(conf, ClientNamenodeProtocolPB.class,
         ProtobufRpcEngine.class);
 
+    // 构造ClientNamenodeProtocolServerSideTranslatorPB对象
+    // 用于适配clientprotocolPB到clientProtocol
     ClientNamenodeProtocolServerSideTranslatorPB 
        clientProtocolServerTranslator = 
          new ClientNamenodeProtocolServerSideTranslatorPB(this);
+    // 构造BlockingService对象
+      // 用于将server提取出的请求转给clientProtocolServerTranslator
+      // newReflectiveBlockingService方法会构造一个匿名的BlockingService类，
+      // 该类的callBlockingMethod方法将请求转发给impl（即clientProtocolServerTranslator）执行
      BlockingService clientNNPbService = ClientNamenodeProtocol.
          newReflectiveBlockingService(clientProtocolServerTranslator);
-    
+
+     // 用于适配datanodePB到DatanodeProtocol
     DatanodeProtocolServerSideTranslatorPB dnProtoPbTranslator = 
         new DatanodeProtocolServerSideTranslatorPB(this);
+      // 给datanode用的BlockingService
+      // 将TranslatorPB传入，TranslatorPB持有了NameNodeRpcServer，所以NameNodeRpcServer是namenode rpc接口的真正实现类
     BlockingService dnProtoPbService = DatanodeProtocolService
         .newReflectiveBlockingService(dnProtoPbTranslator);
 
+    // 设置其他
     NamenodeProtocolServerSideTranslatorPB namenodeProtocolXlator = 
         new NamenodeProtocolServerSideTranslatorPB(this);
     BlockingService NNPbService = NamenodeProtocolService
@@ -269,6 +280,11 @@ class NameNodeRpcServer implements NamenodeProtocols {
     
     WritableRpcEngine.ensureInitialized();
 
+    /*
+    这个方法以后可以再研究下
+    Services here are datanodes, backup node, any non client connection
+    返回的是非client的
+     */
     InetSocketAddress serviceRpcAddr = nn.getServiceRpcServerAddress(conf);
     if (serviceRpcAddr != null) {
       String bindHost = nn.getServiceRpcServerBindHost(conf);
@@ -281,7 +297,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       int serviceHandlerCount =
         conf.getInt(DFS_NAMENODE_SERVICE_HANDLER_COUNT_KEY,
                     DFS_NAMENODE_SERVICE_HANDLER_COUNT_DEFAULT);
-//      构建器模式创建rpc服务
+//      构建器模式创建rpc服务，用于响应来自datanode的请求
       this.serviceRpcServer = new RPC.Builder(conf)
           .setProtocol(
               org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolPB.class)
@@ -292,6 +308,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
           .setSecretManager(namesystem.getDelegationTokenSecretManager())
           .build();
 
+      // 所有NamenodeRpcServer实现的接口
       // Add all the RPC protocols that the namenode implements
       DFSUtil.addPBProtocol(conf, HAServiceProtocolPB.class, haPbService,
           serviceRpcServer);
@@ -301,14 +318,14 @@ class NameNodeRpcServer implements NamenodeProtocols {
           serviceRpcServer);
       DFSUtil.addPBProtocol(conf, RefreshAuthorizationPolicyProtocolPB.class,
           refreshAuthService, serviceRpcServer);
-      DFSUtil.addPBProtocol(conf, RefreshUserMappingsProtocolPB.class, 
+      DFSUtil.addPBProtocol(conf, RefreshUserMappingsProtocolPB.class,
           refreshUserMappingService, serviceRpcServer);
       // We support Refreshing call queue here in case the client RPC queue is full
       DFSUtil.addPBProtocol(conf, RefreshCallQueueProtocolPB.class,
           refreshCallQueueService, serviceRpcServer);
       DFSUtil.addPBProtocol(conf, GenericRefreshProtocolPB.class,
           genericRefreshService, serviceRpcServer);
-      DFSUtil.addPBProtocol(conf, GetUserMappingsProtocolPB.class, 
+      DFSUtil.addPBProtocol(conf, GetUserMappingsProtocolPB.class,
           getUserMappingService, serviceRpcServer);
       DFSUtil.addPBProtocol(conf, TraceAdminProtocolPB.class,
           traceAdminService, serviceRpcServer);
@@ -329,6 +346,8 @@ class NameNodeRpcServer implements NamenodeProtocols {
     }
     LOG.info("RPC server is binding to " + bindHost + ":" + rpcAddr.getPort());
 
+    // 构造clientRpcServer，用于响应hdfs客户端的请求
+    // 和serviceRpcServer的区别在哪儿？？？应该是获取的InetSocketAddress不同：getServiceRpcServerAddress/getRpcServerAddress
     this.clientRpcServer = new RPC.Builder(conf)
         .setProtocol(
             org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolPB.class)
@@ -337,6 +356,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
         .setVerbose(false)
         .setSecretManager(namesystem.getDelegationTokenSecretManager()).build();
 
+    // 所有NamenodeRpcServer实现的接口
     // Add all the RPC protocols that the namenode implements
     DFSUtil.addPBProtocol(conf, HAServiceProtocolPB.class, haPbService,
         clientRpcServer);

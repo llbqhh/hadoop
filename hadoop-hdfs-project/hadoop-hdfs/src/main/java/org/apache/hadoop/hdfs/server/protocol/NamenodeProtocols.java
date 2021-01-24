@@ -28,7 +28,9 @@ import org.apache.hadoop.ipc.GenericRefreshProtocol;
 import org.apache.hadoop.tools.GetUserMappingsProtocol;
 import org.apache.hadoop.tracing.TraceAdminProtocol;
 
-/** The full set of RPC methods implemented by the Namenode.  */
+/** The full set of RPC methods implemented by the Namenode.
+ * 所有需要与namenode交互的协议 ，用于NameNodeRpcServer
+ * */
 @InterfaceAudience.Private
 public interface NamenodeProtocols
   extends ClientProtocol,
