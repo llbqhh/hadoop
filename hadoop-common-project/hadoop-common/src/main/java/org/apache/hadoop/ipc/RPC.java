@@ -777,7 +777,7 @@ public class RPC {
       if (this.instance == null) {
         throw new HadoopIllegalArgumentException("instance is not set");
       }
-      
+      // 即获取ProtobufRpcEngine，再调用它的getServer方法
       return getProtocolEngine(this.protocol, this.conf).getServer(
           this.protocol, this.instance, this.bindAddress, this.port,
           this.numHandlers, this.numReaders, this.queueSizePerHandler,

@@ -298,6 +298,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
         conf.getInt(DFS_NAMENODE_SERVICE_HANDLER_COUNT_KEY,
                     DFS_NAMENODE_SERVICE_HANDLER_COUNT_DEFAULT);
 //      构建器模式创建rpc服务，用于响应来自datanode的请求
+        // 所有ClientNamenodeProtocolPB的调用会由clientNNPbService来响应
       this.serviceRpcServer = new RPC.Builder(conf)
           .setProtocol(
               org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolPB.class)
