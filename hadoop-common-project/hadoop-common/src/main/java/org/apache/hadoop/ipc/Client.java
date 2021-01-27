@@ -303,11 +303,13 @@ public class Client {
    * Class that represents an RPC call
    */
   static class Call {
+    // rpc请求id
     final int id;               // call id
     final int retry;           // retry count
     final Writable rpcRequest;  // the serialized rpc request
     Writable rpcResponse;       // null if rpc has error
     IOException error;          // exception, null if success
+    // rpc引擎类型 例如：RPC_PROTOCOL_BUFFER=ProtobufRpcEngine
     final RPC.RpcKind rpcKind;      // Rpc EngineKind
     boolean done;               // true when call is done
 
@@ -335,6 +337,7 @@ public class Client {
      * value or error are available.  Notifies by default.  */
     protected synchronized void callComplete() {
       this.done = true;
+      // 唤醒call
       notify();                                 // notify caller
     }
 
@@ -345,6 +348,7 @@ public class Client {
      */
     public synchronized void setException(IOException error) {
       this.error = error;
+      // 唤醒call
       callComplete();
     }
     
@@ -355,6 +359,7 @@ public class Client {
      */
     public synchronized void setRpcResponse(Writable rpcResponse) {
       this.rpcResponse = rpcResponse;
+      // 唤醒call
       callComplete();
     }
     
@@ -368,12 +373,14 @@ public class Client {
    * socket: responses may be delivered out of order. */
   private class Connection extends Thread {
     private InetSocketAddress server;             // server ip:port
+    // 唯一标识一个connection
     private final ConnectionId remoteId;                // connection id
     private AuthMethod authMethod; // authentication method
     private AuthProtocol authProtocol;
     private int serviceClass;
     private SaslRpcClient saslRpcClient;
-    
+
+    // 到server到socket连接
     private Socket socket = null;                 // connected socket
     private DataInputStream in;
     private DataOutputStream out;
@@ -389,9 +396,12 @@ public class Client {
     private ByteArrayOutputStream pingRequest; // ping message
     
     // currently active calls
+    // 使用这个connection发送的请求；一个connection对象对应一个server，所有调用这个server的rpc请求都可以复用这个connection
     private Hashtable<Integer, Call> calls = new Hashtable<Integer, Call>();
     private AtomicLong lastActivity = new AtomicLong();// last I/O activity time
+    // 是否关闭此连接
     private AtomicBoolean shouldCloseConnection = new AtomicBoolean();  // indicate if the connection is closed
+    // 导致连接关闭的异常
     private IOException closeException; // close reason
     
     private final Object sendRpcRequestLock = new Object();
@@ -1435,10 +1445,13 @@ public class Client {
   public Writable call(RPC.RpcKind rpcKind, Writable rpcRequest,
       ConnectionId remoteId, int serviceClass,
       AtomicBoolean fallbackToSimpleAuth) throws IOException {
+    // 构造call对象
     final Call call = createCall(rpcKind, rpcRequest);
+    // 获取连接
     Connection connection = getConnection(remoteId, call, serviceClass,
       fallbackToSimpleAuth);
     try {
+      // 发送请求，方法内部会阻塞（Future.get()）??
       connection.sendRpcRequest(call);                 // send the rpc request
     } catch (RejectedExecutionException e) {
       throw new IOException("connection has been closed", e);
@@ -1452,6 +1465,7 @@ public class Client {
     synchronized (call) {
       while (!call.done) {
         try {
+          // 等待rpc响应
           call.wait();                           // wait for the result
         } catch (InterruptedException ie) {
           // save the fact that we were interrupted
@@ -1464,6 +1478,7 @@ public class Client {
         Thread.currentThread().interrupt();
       }
 
+      // 如果有异常，处理
       if (call.error != null) {
         if (call.error instanceof RemoteException) {
           call.error.fillInStackTrace();
@@ -1477,6 +1492,7 @@ public class Client {
                   call.error);
         }
       } else {
+        // 没有异常则返回rpcResponse
         return call.getRpcResponse();
       }
     }
