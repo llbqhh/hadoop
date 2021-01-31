@@ -574,14 +574,17 @@ public abstract class Server {
       port = acceptChannel.socket().getLocalPort(); //Could be an ephemeral port
       // create a selector;
       selector= Selector.open();
+      // readThreads默认为1
       readers = new Reader[readThreads];
       for (int i = 0; i < readThreads; i++) {
         Reader reader = new Reader(
             "Socket Reader #" + (i + 1) + " for port " + port);
         readers[i] = reader;
+        // 启动reader线程
         reader.start();
       }
 
+      // listner注册accetp事件
       // Register accepts on the server socket with the selector.
       acceptChannel.register(selector, SelectionKey.OP_ACCEPT);
       this.setName("IPC Server listener on " + port);
@@ -623,16 +626,19 @@ public abstract class Server {
             int size = pendingConnections.size();
             for (int i=size; i>0; i--) {
               Connection conn = pendingConnections.take();
+              // reader在这里为请求注册读事件
               conn.channel.register(readSelector, SelectionKey.OP_READ, conn);
             }
             readSelector.select();
 
+            // 获取读事件
             Iterator<SelectionKey> iter = readSelector.selectedKeys().iterator();
             while (iter.hasNext()) {
               key = iter.next();
               iter.remove();
               if (key.isValid()) {
                 if (key.isReadable()) {
+                  // 调用方法处理读事件
                   doRead(key);
                 }
               }
@@ -679,6 +685,7 @@ public abstract class Server {
         SelectionKey key = null;
         try {
           getSelector().select();
+          // 获取新的连接请求
           Iterator<SelectionKey> iter = getSelector().selectedKeys().iterator();
           while (iter.hasNext()) {
             key = iter.next();
@@ -686,6 +693,7 @@ public abstract class Server {
             try {
               if (key.isValid()) {
                 if (key.isAcceptable())
+                  // 为连接请求调用doAccept方法
                   doAccept(key);
               }
             } catch (IOException e) {
@@ -693,6 +701,8 @@ public abstract class Server {
             key = null;
           }
         } catch (OutOfMemoryError e) {
+          // 线程太多可能会内存溢出，在这里关闭当前的客户端连接，并休眠1分钟，让在运行的线程结束（释放内存）
+          // 调用了connectionManager.closeIdle(true)，看方法应该是关闭一些闲置连接？用于释放内地
           // we can run out of memory if we have too many threads
           // log the event and sleep for a minute and give 
           // some thread(s) a chance to finish
@@ -743,16 +753,21 @@ public abstract class Server {
         channel.configureBlocking(false);
         channel.socket().setTcpNoDelay(tcpNoDelay);
         channel.socket().setKeepAlive(true);
-        
+
+        // 从reader数组中获取一个（简单的round robin算法）
         Reader reader = getReader();
+        // 构造一个Connection对象并放入connections集合中
         Connection c = connectionManager.register(channel);
+        // 将connection对象添加到key的附件中传递给reader
         key.attach(c);  // so closeCurrentConnection can get the object
+        // 把connection对象存入reader对象的pendingConnections队列中
         reader.addConnection(c);
       }
     }
 
     void doRead(SelectionKey key) throws InterruptedException {
       int count = 0;
+      // 获取connection对象
       Connection c = (Connection)key.attachment();
       if (c == null) {
         return;  
@@ -760,6 +775,7 @@ public abstract class Server {
       c.setLastContact(Time.now());
       
       try {
+        // 处理读请求
         count = c.readAndProcess();
       } catch (InterruptedException ieo) {
         LOG.info(Thread.currentThread().getName() + ": readAndProcess caught InterruptedException", ieo);
@@ -1473,7 +1489,8 @@ public abstract class Server {
           if (count < 0 || dataLengthBuffer.remaining() > 0) 
             return count;
         }
-        
+
+        // 获取连接头？
         if (!connectionHeaderRead) {
           //Every connection is expected to send the header.
           if (connectionHeaderBuf == null) {
@@ -1522,13 +1539,15 @@ public abstract class Server {
           checkDataLength(dataLength);
           data = ByteBuffer.allocate(dataLength);
         }
-        
+
+        // 将rpc请求读到data中
         count = channelRead(channel, data);
         
         if (data.remaining() == 0) {
           dataLengthBuffer.clear();
           data.flip();
           boolean isHeaderRead = connectionContextRead;
+          // 处理一次rpc请求的
           processOneRpc(data.array());
           data = null;
           if (!isHeaderRead) {
@@ -1755,6 +1774,7 @@ public abstract class Server {
       try {
         final DataInputStream dis =
             new DataInputStream(new ByteArrayInputStream(buf));
+        // 解析rpc请求头
         final RpcRequestHeaderProto header =
             decodeProtobufFromStream(RpcRequestHeaderProto.newBuilder(), dis);
         callId = header.getCallId();
@@ -1763,7 +1783,8 @@ public abstract class Server {
           LOG.debug(" got #" + callId);
         }
         checkRpcHeaders(header);
-        
+
+        // 处理异常
         if (callId < 0) { // callIds typically used during connection setup
           processRpcOutOfBandRequest(header, dis);
         } else if (!connectionContextRead) {
@@ -1771,6 +1792,7 @@ public abstract class Server {
               RpcErrorCodeProto.FATAL_INVALID_RPC_HEADER,
               "Connection context not established");
         } else {
+          // 处理正常rpc请求
           processRpcRequest(header, dis);
         }
       } catch (WrappedRpcServerException wrse) { // inform client of error
@@ -1779,6 +1801,7 @@ public abstract class Server {
         setupResponse(authFailedResponse, call,
             RpcStatusProto.FATAL, wrse.getRpcErrorCodeProto(), null,
             ioe.getClass().getName(), ioe.getMessage());
+        // 直接在这里通过socket返回异常信息的rpc响应
         responder.doRespond(call);
         throw wrse;
       }
@@ -1836,6 +1859,8 @@ public abstract class Server {
         throw new WrappedRpcServerException(
             RpcErrorCodeProto.FATAL_INVALID_RPC_HEADER, err);   
       }
+
+      // 读取rpc请求体
       Writable rpcRequest;
       try { //Read the rpc request
         rpcRequest = ReflectionUtils.newInstance(rpcRequestClass, conf);
@@ -1857,10 +1882,12 @@ public abstract class Server {
         traceSpan = Trace.startSpan(rpcRequest.toString(), parentSpan).detach();
       }
 
+      // 构造call对象
       Call call = new Call(header.getCallId(), header.getRetryCount(),
           rpcRequest, this, ProtoUtil.convert(header.getRpcKind()),
           header.getClientId().toByteArray(), traceSpan);
 
+      // 放入callQueue队列中，等待handler处理
       callQueue.put(call);              // queue the call; maybe blocked here
       incRpcCount();  // Increment the rpc count
     }
@@ -2005,6 +2032,7 @@ public abstract class Server {
       while (running) {
         TraceScope traceScope = null;
         try {
+          // 获取一个call
           final Call call = callQueue.take(); // pop the queue; maybe blocked here
           if (LOG.isDebugEnabled()) {
             LOG.debug(Thread.currentThread().getName() + ": " + call + " for RpcKind " + call.rpcKind);
@@ -2024,6 +2052,7 @@ public abstract class Server {
             traceScope = Trace.continueSpan(call.traceSpan);
           }
 
+          // 通过call方法发起本地调用，并返回结果
           try {
             // Make the call as the user via Subject.doAs, thus associating
             // the call with the Subject
@@ -2082,6 +2111,7 @@ public abstract class Server {
             // responder.doResponse() since setupResponse may use
             // SASL to encrypt response data and SASL enforces
             // its own message ordering.
+            // 构造rpc响应信息，写入call对象（call.setResponse），正常或异常都在这里构造
             setupResponse(buf, call, returnStatus, detailedErr, 
                 value, errorClass, error);
             
@@ -2092,6 +2122,8 @@ public abstract class Server {
                   + call.toString());
               buf = new ByteArrayOutputStream(INITIAL_RESP_BUF_SIZE);
             }
+            // responder负责返回rpc响应；
+            // 当网络环境不佳或响应信息过大时，会用write事件异步处理
             responder.doRespond(call);
           }
         } catch (InterruptedException e) {
@@ -2203,6 +2235,7 @@ public abstract class Server {
     this.negotiateResponse = buildNegotiateResponse(enabledAuthMethods);
     
     // Start the listener here and let it bind to the port
+    // 只有一个listener
     listener = new Listener();
     this.port = listener.getAddress().getPort();    
     connectionManager = new ConnectionManager();
@@ -2213,6 +2246,7 @@ public abstract class Server {
         CommonConfigurationKeysPublic.IPC_SERVER_TCPNODELAY_DEFAULT);
 
     // Create the responder here
+    // 只有一个responder
     responder = new Responder();
     
     if (secretManager != null || UserGroupInformation.isSecurityEnabled()) {
@@ -2425,6 +2459,7 @@ public abstract class Server {
   public synchronized void start() {
     responder.start();
     listener.start();
+    // handlerCount默认为1
     handlers = new Handler[handlerCount];
     
     for (int i = 0; i < handlerCount; i++) {
