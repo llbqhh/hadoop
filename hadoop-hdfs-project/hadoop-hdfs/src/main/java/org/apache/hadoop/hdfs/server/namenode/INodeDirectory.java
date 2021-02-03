@@ -47,6 +47,7 @@ import com.google.common.collect.ImmutableList;
 
 /**
  * Directory INode class.
+ * 主要有对于children、feature（如quota）、snapshot相关操作方法
  */
 public class INodeDirectory extends INodeWithAdditionalFields
     implements INodeDirectoryAttributes {
@@ -67,6 +68,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
   protected static final int DEFAULT_FILES_PER_DIRECTORY = 5;
   final static byte[] ROOT_NAME = DFSUtil.string2Bytes("");
 
+  /**
+   * 保存所有子节点的INode对象，从add方法中可以看出是的有序存储
+   */
   private List<INode> children = null;
   
   /** constructor */
@@ -186,6 +190,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   int searchChildren(byte[] name) {
+    // 所以children这个list中的数据都是有序的（按name）
     return children == null? -1: Collections.binarySearch(children, name);
   }
   
@@ -509,6 +514,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    */
   public boolean addChild(INode node, final boolean setModTime,
       final int latestSnapshotId) throws QuotaExceededException {
+    // 先确定node在数组中存放的位置
     final int low = searchChildren(node.getLocalNameBytes());
     if (low >= 0) {
       return false;
@@ -531,6 +537,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   public boolean addChild(INode node) {
+    // 先确定node在数组中存放的位置
     final int low = searchChildren(node.getLocalNameBytes());
     if (low >= 0) {
       return false;
@@ -547,7 +554,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
     if (children == null) {
       children = new ArrayList<INode>(DEFAULT_FILES_PER_DIRECTORY);
     }
+    // 将本节点设为node的父节点
     node.setParent(this);
+    // node加入到children集合
     children.add(-insertionPoint - 1, node);
 
     if (node.getGroupName() == null) {

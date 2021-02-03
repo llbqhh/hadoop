@@ -30,10 +30,17 @@ import com.google.common.base.Preconditions;
 /**
  * {@link INode} with additional fields including id, name, permission,
  * access time and modification time.
+ * 主要有以下子类：INodeDirectory、INodeFile、InodeSymlink
  */
 @InterfaceAudience.Private
 public abstract class INodeWithAdditionalFields extends INode
     implements LinkedElement {
+  /**
+   * 通过位操作处理及解析权限的工具
+   * 前16位代表权限，类似linux中的777
+   * 中25位代表所属组
+   * 后23位代表所属用户
+   */
   static enum PermissionStatusFormat {
     MODE(null, 16),
     GROUP(MODE.BITS, 25),
@@ -42,11 +49,16 @@ public abstract class INodeWithAdditionalFields extends INode
     final LongBitFormat BITS;
 
     private PermissionStatusFormat(LongBitFormat previous, int length) {
+      // 用LongBitFormat来做位操作
+      // todo 细看看retrieve、combine方法
       BITS = new LongBitFormat(name(), previous, length, 0);
     }
 
     static String getUser(long permission) {
+      // 先取后23位bit
       final int n = (int)USER.BITS.retrieve(permission);
+      // 使用另外的SerialNumberManager来管理id=》name之间的关系，节省INode内存
+      // 通过SerialNumberManager获取对应的用户名
       return SerialNumberManager.INSTANCE.getUser(n);
     }
 
@@ -60,6 +72,7 @@ public abstract class INodeWithAdditionalFields extends INode
     }
 
     /** Encode the {@link PermissionStatus} to a long. */
+    // 用combine方法将PermissionStatus对象转为long
     static long toLong(PermissionStatus ps) {
       long permission = 0L;
       final int user = SerialNumberManager.INSTANCE.getUserSerialNumber(
@@ -89,6 +102,7 @@ public abstract class INodeWithAdditionalFields extends INode
    * Codes other than {@link #clonePermissionStatus(INodeWithAdditionalFields)}
    * and {@link #updatePermissionStatus(PermissionStatusFormat, long)}
    * should not modify it.
+   * 文件权限，用PermissionStatusFormat工具类具体做解析
    */
   private long permission = 0L;
   /** The last modification time*/
@@ -100,6 +114,9 @@ public abstract class INodeWithAdditionalFields extends INode
   private LinkedElement next = null;
   /** An array {@link Feature}s. */
   private static final Feature[] EMPTY_FEATURE = new Feature[0];
+  /**
+   * 用来保存当前inode有哪些feature，如【磁盘配额】、【快照】、【正在构建】、【acl】、【xattr】等
+   */
   protected Feature[] features = EMPTY_FEATURE;
 
   private INodeWithAdditionalFields(INode parent, long id, byte[] name,
@@ -275,11 +292,15 @@ public abstract class INodeWithAdditionalFields extends INode
 
   protected void addFeature(Feature f) {
     int size = features.length;
+    // 申请更大的数组
     Feature[] arr = new Feature[size + 1];
     if (size != 0) {
+      // 拷贝旧数据
       System.arraycopy(features, 0, arr, 0, size);
     }
+    // 将新的feature加如到新数组
     arr[size] = f;
+    // features指向新数组
     features = arr;
   }
 

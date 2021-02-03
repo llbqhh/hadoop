@@ -47,12 +47,16 @@ import com.google.common.base.Preconditions;
  * We keep an in-memory representation of the file/block hierarchy.
  * This is a base INode class containing common fields for file and 
  * directory inodes.
+ * 抽象类，定义了更多的属性如parent、fullPathName、id等，和一些基本判断方法如isFile、isDirectory、isSymlink、isRoot等
+ * 设计上用了模板模式，见setUser等方法
+ * INode只有一个parent字段，其余都是定义，其他字段大都在INodeWithAdditionalFields抽象类中定义
  */
 @InterfaceAudience.Private
 public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
   public static final Log LOG = LogFactory.getLog(INode.class);
 
   /** parent is either an {@link INodeDirectory} or an {@link INodeReference}.*/
+  // 父节点，set方法只接收这两种INodeDirectory、INodeReference
   private INode parent = null;
 
   INode(INode parent) {
@@ -93,9 +97,11 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]> {
   }
 
   /** Set user */
+  // 抽象方法，具体实现留给子类
   abstract void setUser(String user);
 
   /** Set user */
+  // 模板方法，final类型供接口调用，规范接口调用
   final INode setUser(String user, int latestSnapshotId)
       throws QuotaExceededException {
     recordModification(latestSnapshotId);

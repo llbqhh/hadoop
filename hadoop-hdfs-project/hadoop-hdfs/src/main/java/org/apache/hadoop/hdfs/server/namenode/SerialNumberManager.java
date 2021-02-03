@@ -22,7 +22,11 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-/** Manage name-to-serial-number maps for users and groups. */
+/** Manage name-to-serial-number maps for users and groups.
+ * 单例模式，用两个ConcurrentHashMap来实现双向的查找
+ * 管理user和group的name到serial-number的双向映射
+ * todo 历史数据从哪里来
+ * */
 class SerialNumberManager {
   /** This is the only instance of {@link SerialNumberManager}.*/
   static final SerialNumberManager INSTANCE = new SerialNumberManager();
@@ -38,6 +42,7 @@ class SerialNumberManager {
   String getGroup(int n) {return groupmap.get(n);}
 
   {
+    // todo 作用是什么
     getUserSerialNumber(null);
     getGroupSerialNumber(null);
   }

@@ -24,6 +24,7 @@ import org.apache.hadoop.hdfs.server.namenode.INodeWithAdditionalFields.Permissi
 import org.apache.hadoop.hdfs.server.namenode.XAttrFeature;
 
 /**
+ * 定义了一些属性的get方法，INode会实现这个类
  * The attributes of an inode.
  */
 @InterfaceAudience.Private
