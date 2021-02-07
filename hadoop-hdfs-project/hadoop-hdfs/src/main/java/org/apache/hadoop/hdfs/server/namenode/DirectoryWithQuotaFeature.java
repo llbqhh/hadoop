@@ -23,7 +23,9 @@ import org.apache.hadoop.hdfs.protocol.NSQuotaExceededException;
 import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
 
 /**
- * Quota feature for {@link INodeDirectory}. 
+ * Quota feature for {@link INodeDirectory}.
+ * nsQuota namespace容量，即目录下的inode文件数
+ * dsQuota 磁盘容量
  */
 public final class DirectoryWithQuotaFeature implements INode.Feature {
   public static final long DEFAULT_NAMESPACE_QUOTA = Long.MAX_VALUE;

@@ -70,6 +70,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
   /**
    * 保存所有子节点的INode对象，从add方法中可以看出是的有序存储
+   * 从addChild方法可以看出这里使用的ArrayList
    */
   private List<INode> children = null;
   
@@ -183,14 +184,16 @@ public class INodeDirectory extends INodeWithAdditionalFields
   DirectoryWithQuotaFeature addDirectoryWithQuotaFeature(
       long nsQuota, long dsQuota) {
     Preconditions.checkState(!isWithQuota(), "Directory is already with quota");
+    // 创建quota对象
     final DirectoryWithQuotaFeature quota = new DirectoryWithQuotaFeature(
         nsQuota, dsQuota);
+    // 加入到feature数组中
     addFeature(quota);
     return quota;
   }
 
   int searchChildren(byte[] name) {
-    // 所以children这个list中的数据都是有序的（按name）
+    // 二分查找（按name）
     return children == null? -1: Collections.binarySearch(children, name);
   }
   
@@ -234,6 +237,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   public DirectorySnapshottableFeature getDirectorySnapshottableFeature() {
+    // 从feature数组中直接查找类名为DirectorySnapshottableFeature的
     return getFeature(DirectorySnapshottableFeature.class);
   }
 
@@ -302,6 +306,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   public void replaceChild(INode oldChild, final INode newChild,
       final INodeMap inodeMap) {
     Preconditions.checkNotNull(children);
+    // 必须在children中找到才继续
     final int i = searchChildren(newChild.getLocalNameBytes());
     Preconditions.checkState(i >= 0);
     Preconditions.checkState(oldChild == children.get(i)
@@ -492,11 +497,14 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @return true if the child is removed; false if the child is not found.
    */
   public boolean removeChild(final INode child) {
+    // 找到应该删除的位置
     final int i = searchChildren(child.getLocalNameBytes());
+    // 必须在children中找到才继续
     if (i < 0) {
       return false;
     }
 
+    // 从list中删除节点
     final INode removed = children.remove(i);
     Preconditions.checkState(removed == child);
     return true;
@@ -516,6 +524,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
       final int latestSnapshotId) throws QuotaExceededException {
     // 先确定node在数组中存放的位置
     final int low = searchChildren(node.getLocalNameBytes());
+    // 必须在children中找不到才继续
     if (low >= 0) {
       return false;
     }
@@ -539,6 +548,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   public boolean addChild(INode node) {
     // 先确定node在数组中存放的位置
     final int low = searchChildren(node.getLocalNameBytes());
+    // 必须在children中找不到才继续
     if (low >= 0) {
       return false;
     }
@@ -913,5 +923,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
   public final int getChildrenNum(final int snapshotId) {
     return getChildrenList(snapshotId).size();
+  }
+
+  private class Preconditions {
   }
 }
