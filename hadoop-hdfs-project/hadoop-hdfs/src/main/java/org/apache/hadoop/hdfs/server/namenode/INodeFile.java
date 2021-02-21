@@ -45,7 +45,11 @@ import org.apache.hadoop.hdfs.util.LongBitFormat;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
-/** I-node for closed file. */
+/** I-node for closed file.
+ * 主要包括下面两个最重要的信息
+ * header文件头：前4bit保存存储策略，中间12个bit保存文件备份系数，后48bit保存数据块大小；用HeaderFormat来解析处理
+ * blocks：BlockInfo数组，保存当前文件对应的所有数据块大小
+ * */
 @InterfaceAudience.Private
 public class INodeFile extends INodeWithAdditionalFields
     implements INodeFileAttributes, BlockCollection {
@@ -113,8 +117,10 @@ public class INodeFile extends INodeWithAdditionalFields
     }
   }
 
+  // 文件头信息
   private long header = 0L;
 
+  // 所有数据块信息
   private BlockInfo[] blocks;
 
   INodeFile(long id, byte[] name, PermissionStatus permissions, long mtime,
@@ -172,6 +178,8 @@ public class INodeFile extends INodeWithAdditionalFields
   /**
    * If the inode contains a {@link FileUnderConstructionFeature}, return it;
    * otherwise, return null.
+   * 类似这种UnderConstruction的方法，是构建特性相关的方法。
+   * 当hdfs客户端写文件时，文件就处于【构建】状态
    */
   public final FileUnderConstructionFeature getFileUnderConstructionFeature() {
     return getFeature(FileUnderConstructionFeature.class);
