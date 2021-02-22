@@ -32,6 +32,11 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import com.google.common.base.Preconditions;
 
 /**
+ * 为解决处于快照中的文件/目录被重命名或移动后可能存在多条访问路径的问题
+ * WithName 快照文件改变路径后，代表旧的路径
+ * DstReference 快照文件改变路径后，代表新的路径
+ * WithCount WithName和DstReference都指向WithCount，由WithCount负责指向真实的INode
+ *
  * An anonymous reference to an inode.
  *
  * This class and its subclasses are used to support multiple access paths.
@@ -113,7 +118,10 @@ public abstract class INodeReference extends INode {
     }
     return Snapshot.NO_SNAPSHOT_ID;
   }
-  
+
+  /**
+   * 指向的INode节点
+   */
   private INode referred;
   
   public INodeReference(INode parent, INode referred) {
@@ -371,7 +379,10 @@ public abstract class INodeReference extends INode {
   
   /** An anonymous reference with reference count. */
   public static class WithCount extends INodeReference {
-    
+
+    /**
+     * 所有指向这个节点的WithName节点
+     */
     private final List<WithName> withNameList = new ArrayList<WithName>();
     
     /**
@@ -387,8 +398,10 @@ public abstract class INodeReference extends INode {
     };
     
     public WithCount(INodeReference parent, INode referred) {
+      // 调用父类构造方法，指向文件系统目录树重点INode
       super(parent, referred);
       Preconditions.checkArgument(!referred.isReference());
+      // 真实INode的父节点指向这里
       referred.setParentReference(this);
     }
     
@@ -402,13 +415,16 @@ public abstract class INodeReference extends INode {
 
     /** Increment and then return the reference count. */
     public void addReference(INodeReference ref) {
+      // 添加Reference时
       if (ref instanceof WithName) {
+        // 如果是WithName节点，加入withNameList
         WithName refWithName = (WithName) ref;
         int i = Collections.binarySearch(withNameList, refWithName,
             WITHNAME_COMPARATOR);
         Preconditions.checkState(i < 0);
         withNameList.add(-i - 1, refWithName);
       } else if (ref instanceof DstReference) {
+        // 如果是DstReference则将其设为WithCount的父节点
         setParentReference(ref);
       }
     }
@@ -470,10 +486,11 @@ public abstract class INodeReference extends INode {
   
   /** A reference with a fixed name. */
   public static class WithName extends INodeReference {
-
+    // 文件改变前的文件名
     private final byte[] name;
 
     /**
+     * 文件改变前的最新snapshot
      * The id of the last snapshot in the src tree when this WithName node was 
      * generated. When calculating the quota usage of the referred node, only 
      * the files/dirs existing when this snapshot was taken will be counted for 
@@ -483,9 +500,11 @@ public abstract class INodeReference extends INode {
     
     public WithName(INodeDirectory parent, WithCount referred, byte[] name,
         int lastSnapshotId) {
+      // 调用父类的构造方法，指向WithCount节点
       super(parent, referred);
       this.name = name;
       this.lastSnapshotId = lastSnapshotId;
+      // 调用WithCount.addReference
       referred.addReference(this);
     }
 
@@ -628,6 +647,7 @@ public abstract class INodeReference extends INode {
   
   public static class DstReference extends INodeReference {
     /**
+     * 改变前的最新snapshot
      * Record the latest snapshot of the dst subtree before the rename. For
      * later operations on the moved/renamed files/directories, if the latest
      * snapshot is after this dstSnapshot, changes will be recorded to the
@@ -646,8 +666,10 @@ public abstract class INodeReference extends INode {
     
     public DstReference(INodeDirectory parent, WithCount referred,
         final int dstSnapshotId) {
+      // 调用父类的构造方法，指向WithCount节点
       super(parent, referred);
       this.dstSnapshotId = dstSnapshotId;
+      // 调用WithCount.addReference
       referred.addReference(this);
     }
     
