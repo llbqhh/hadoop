@@ -565,6 +565,7 @@ public class FSDirectory implements Closeable {
     verifyFsLimitsForRename(srcIIP, dstIIP);
     verifyQuotaForRename(srcIIP.getINodes(), dstIIP.getINodes());
 
+    // 构造RenameOperation
     RenameOperation tx = new RenameOperation(src, dst, srcIIP, dstIIP);
 
     boolean added = false;
@@ -579,6 +580,7 @@ public class FSDirectory implements Closeable {
         return false;
       }
 
+      // 执行rename操作的移动文件动作
       added = tx.addSourceToDestination();
       if (added) {
         if (NameNode.stateChangeLog.isDebugEnabled()) {
@@ -691,6 +693,7 @@ public class FSDirectory implements Closeable {
     verifyFsLimitsForRename(srcIIP, dstIIP);
     verifyQuotaForRename(srcIIP.getINodes(), dstIIP.getINodes());
 
+    // 构造RenameOperation
     RenameOperation tx = new RenameOperation(src, dst, srcIIP, dstIIP);
 
     boolean undoRemoveSrc = true;
@@ -715,6 +718,7 @@ public class FSDirectory implements Closeable {
       }
 
       // add src as dst to complete rename
+      // 执行rename操作的移动文件动作
       if (tx.addSourceToDestination()) {
         undoRemoveSrc = false;
         if (NameNode.stateChangeLog.isDebugEnabled()) {
@@ -889,7 +893,9 @@ public class FSDirectory implements Closeable {
       srcRefDstSnapshot = srcChildIsReference ? srcChild.asReference()
               .getDstSnapshotId() : Snapshot.CURRENT_STATE_ID;
       oldSrcCounts = Quota.Counts.newInstance();
+      // 如果原节点在快照中
       if (isSrcInSnapshot) {
+        // 调用replaceChild4ReferenceWithName方法构造WithName和WithCount对象
         final INodeReference.WithName withName = srcIIP.getINode(-2).asDirectory()
                 .replaceChild4ReferenceWithName(srcChild, srcIIP.getLatestSnapshotId());
         withCount = (INodeReference.WithCount) withName.getReferredINode();
@@ -901,6 +907,7 @@ public class FSDirectory implements Closeable {
         // srcChild is reference but srcChild is not in latest snapshot
         withCount = (WithCount) srcChild.asReference().getReferredINode();
       } else {
+        // 如果withCount=null，则为普通的重命名操作
         withCount = null;
       }
     }
@@ -911,14 +918,17 @@ public class FSDirectory implements Closeable {
       final byte[] dstChildName = dstIIP.getLastLocalName();
       final INode toDst;
       if (withCount == null) {
+        // 普通情况直接添加
         srcChild.setLocalName(dstChildName);
         toDst = srcChild;
       } else {
+        // 使用INodeReference机制，构造DstReference对象，并将toDst指向它
         withCount.getReferredINode().setLocalName(dstChildName);
         int dstSnapshotId = dstIIP.getLatestSnapshotId();
         toDst = new INodeReference.DstReference(
                 dstParent.asDirectory(), withCount, dstSnapshotId);
       }
+      // 将toDst添加到目标路径
       return addLastINodeNoQuotaCheck(dstIIP, toDst);
     }
 
