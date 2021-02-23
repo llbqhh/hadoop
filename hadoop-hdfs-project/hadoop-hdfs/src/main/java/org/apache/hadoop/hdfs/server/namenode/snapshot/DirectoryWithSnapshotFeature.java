@@ -55,6 +55,7 @@ import com.google.common.base.Preconditions;
 @InterfaceAudience.Private
 public class DirectoryWithSnapshotFeature implements INode.Feature {
   /**
+   * 继承自Diff类，描述INode集合状态间的差异
    * The difference between the current state and a previous snapshot
    * of the children list of an INodeDirectory.
    */

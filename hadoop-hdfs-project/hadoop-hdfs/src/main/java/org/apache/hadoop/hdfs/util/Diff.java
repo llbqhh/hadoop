@@ -25,6 +25,8 @@ import java.util.List;
 import com.google.common.base.Preconditions;
 
 /**
+ * 描述一个集合的当前状态和上一个状态之间的不同
+ * 新创建的元素放入c-list,删除的元素放入d-list,修改的元素则同时放入c-list和d-list
  * The difference between the current state and a previous state of a list.
  * 
  * Given a previous state of a set and a sequence of create, delete and modify
@@ -144,9 +146,15 @@ public class Diff<K, E extends Diff.Element<K>> {
         "removed != expected=%s, removed=%s.", expected, removed);
   }
 
-  /** c-list: element(s) created in current. */
+  /**
+   * 记录了集合在两个状态之间新创建的元素
+   * c-list: element(s) created in current.
+   * */
   private List<E> created;
-  /** d-list: element(s) deleted from current. */
+  /**
+   * 记录了集合在两个状态之间删除的元素
+   * d-list: element(s) deleted from current.
+   * */
   private List<E> deleted;
   
   protected Diff() {}

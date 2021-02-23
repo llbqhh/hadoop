@@ -30,6 +30,7 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.SnapshotFSImageFormat.Ref
 import com.google.common.base.Preconditions;
 
 /**
+ * 描述类inode在两个快照版本之间的差异
  * The difference of an inode between in two snapshots.
  * {@link AbstractINodeDiffList} maintains a list of snapshot diffs,
  * <pre>
@@ -52,11 +53,18 @@ abstract class AbstractINodeDiff<N extends INode,
                                  D extends AbstractINodeDiff<N, A, D>>
     implements Comparable<Integer> {
 
-  /** The id of the corresponding snapshot. */
+  /**
+   * 当前AbstractINodeDiff对象对应的快照id
+   * The id of the corresponding snapshot.
+   * */
   private int snapshotId;
-  /** The snapshot inode data.  It is null when there is no change. */
+  /**
+   * 快照所对应的inode的数据，如果没有变化则为null
+   * The snapshot inode data.  It is null when there is no change.
+   * */
   A snapshotINode;
   /**
+   * 下一个快照版本与当前快照版本之间差异的AbstractINodeDiff
    * Posterior diff is the diff happened after this diff.
    * The posterior diff should be first applied to obtain the posterior
    * snapshot and then apply this diff in order to obtain this snapshot.
