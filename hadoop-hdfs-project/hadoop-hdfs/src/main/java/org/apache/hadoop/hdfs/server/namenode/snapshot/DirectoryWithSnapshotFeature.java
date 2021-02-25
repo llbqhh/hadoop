@@ -48,6 +48,7 @@ import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import com.google.common.base.Preconditions;
 
 /**
+ * 用于存储、处理指定目录下创建的所有快照
  * Feature used to store and process the snapshot diff information for a
  * directory. In particular, it contains a directory diff list recording changes
  * made to the directory and its children for each snapshot.
@@ -163,20 +164,27 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
   }
 
   /**
+   * 用于描述INodeDirectory在两个快照间的差异
    * The difference of an {@link INodeDirectory} between two snapshots.
    */
   public static class DirectoryDiff extends
       AbstractINodeDiff<INodeDirectory, INodeDirectoryAttributes, DirectoryDiff> {
-    /** The size of the children list at snapshot creation time. */
+    /**
+     * 快照创建时，INodeDirectory子目录数
+     * The size of the children list at snapshot creation time. */
     private final int childrenSize;
-    /** The children list diff. */
+    /**
+     * 子目录项diff
+     * The children list diff. */
     private final ChildrenDiff diff;
     private boolean isSnapshotRoot = false;
     
     private DirectoryDiff(int snapshotId, INodeDirectory dir) {
       super(snapshotId, null, null);
 
+      // 创建快照时，获取子目录数
       this.childrenSize = dir.getChildrenList(Snapshot.CURRENT_STATE_ID).size();
+      // 创建ChildrenDiff，记录子目录变化
       this.diff = new ChildrenDiff();
     }
 
@@ -322,7 +330,9 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
     }
   }
 
-  /** A list of directory diffs. */
+  /**
+   * 维护类INodeDirectory所有快照之间的差异集合
+   * A list of directory diffs. */
   public static class DirectoryDiffList
       extends AbstractINodeDiffList<INodeDirectory, INodeDirectoryAttributes, DirectoryDiff> {
 

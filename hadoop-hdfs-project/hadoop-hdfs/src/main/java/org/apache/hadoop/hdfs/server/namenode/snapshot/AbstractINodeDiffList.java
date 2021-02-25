@@ -30,6 +30,7 @@ import org.apache.hadoop.hdfs.server.namenode.INodeAttributes;
 import org.apache.hadoop.hdfs.server.namenode.Quota;
 
 /**
+ * 记录类INode在所有快照间的差异列表
  * A list of snapshot diffs for storing snapshot data.
  *
  * @param <N> The {@link INode} type.
