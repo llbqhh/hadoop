@@ -529,6 +529,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
       return false;
     }
 
+    // 如果开启了快照，第一次会走if代码块，由DirectoryWithSnapshotFeature代理创建
+    // 创建完后会从DirectoryWithSnapshotFeature中的addChild方法再次回调本方法，由于latestSnapshotId的不同，第二次会执行addChild(node, low)方法
     if (isInLatestSnapshot(latestSnapshotId)) {
       // create snapshot feature if necessary
       DirectoryWithSnapshotFeature sf = this.getDirectoryWithSnapshotFeature();

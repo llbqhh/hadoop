@@ -59,6 +59,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
   static final int SNAPSHOT_LIMIT = 1 << 16;
 
   /**
+   * 保存当前目录下创建的所有快照
    * Snapshots of this directory in ascending order of snapshot names.
    * Note that snapshots in ascending order of snapshot id are stored in
    * {@link DirectoryWithSnapshotFeature}.diffs (a private field).
@@ -255,14 +256,17 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
    */
   SnapshotDiffInfo computeDiff(final INodeDirectory snapshotRoot,
       final String from, final String to) throws SnapshotException {
+    // 从snapshotsByNames集合中获取待查看的两个集合
     Snapshot fromSnapshot = getSnapshotByName(snapshotRoot, from);
     Snapshot toSnapshot = getSnapshotByName(snapshotRoot, to);
     // if the start point is equal to the end point, return null
     if (from.equals(to)) {
       return null;
     }
+    // 构造SnapshotDiffInfo，用于保存差异
     SnapshotDiffInfo diffs = new SnapshotDiffInfo(snapshotRoot, fromSnapshot,
         toSnapshot);
+    // 递归比较两个快照，差异存入SnapshotDiffInfo对象
     computeDiffRecursively(snapshotRoot, snapshotRoot, new ArrayList<byte[]>(),
         diffs);
     return diffs;
@@ -302,28 +306,41 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
    */
   private void computeDiffRecursively(final INodeDirectory snapshotRoot,
       INode node, List<byte[]> parentPath, SnapshotDiffInfo diffReport) {
+    // 获取两个快照
     final Snapshot earlierSnapshot = diffReport.isFromEarlier() ?
         diffReport.getFrom() : diffReport.getTo();
     final Snapshot laterSnapshot = diffReport.isFromEarlier() ?
         diffReport.getTo() : diffReport.getFrom();
+
+    // 当前路径
     byte[][] relativePath = parentPath.toArray(new byte[parentPath.size()][]);
+
+    // 当前节点是目录
     if (node.isDirectory()) {
+      // diff用来保存两个快照间的操作
       final ChildrenDiff diff = new ChildrenDiff();
       INodeDirectory dir = node.asDirectory();
       DirectoryWithSnapshotFeature sf = dir.getDirectoryWithSnapshotFeature();
       if (sf != null) {
+        // 调用computeDiffBetweenSnapshots合并两个快照间的操作到diff中
         boolean change = sf.computeDiffBetweenSnapshots(earlierSnapshot,
             laterSnapshot, diff, dir);
         if (change) {
+          // 如果当前目录在两个快照间发生变化，则写入diffReport中
           diffReport.addDirDiff(dir, relativePath, diff);
         }
       }
+
+      // 获取earlierSnapshot快照建立时当前目录的所有子目录
       ReadOnlyList<INode> children = dir.getChildrenList(earlierSnapshot
           .getId());
+      // 遍历子目录
       for (INode child : children) {
         final byte[] name = child.getLocalNameBytes();
         boolean toProcess = diff.searchIndex(ListType.DELETED, name) < 0;
+        // 如果子目录在lastSnapshot中已经被删除，则无需递归处理
         if (!toProcess && child instanceof INodeReference.WithName) {
+          // 如果发生了rename操作，则在diffReport中记录
           byte[][] renameTargetPath = findRenameTargetPath(
               snapshotRoot, (WithName) child,
               laterSnapshot == null ? Snapshot.CURRENT_STATE_ID :
@@ -333,6 +350,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
             diffReport.setRenameTarget(child.getId(), renameTargetPath);
           }
         }
+        // 如果子目录在lastSnapshot中没有被删除，则调用computeDiffRecursively递归处理
         if (toProcess) {
           parentPath.add(name);
           computeDiffRecursively(snapshotRoot, child, parentPath, diffReport);
@@ -340,6 +358,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
         }
       }
     } else if (node.isFile() && node.asFile().isWithSnapshot()) {
+      // 对于文件，如果发生改变，也记录到diffReport中
       INodeFile file = node.asFile();
       boolean change = file.getFileWithSnapshotFeature()
           .changedBetweenSnapshots(file, earlierSnapshot, laterSnapshot);

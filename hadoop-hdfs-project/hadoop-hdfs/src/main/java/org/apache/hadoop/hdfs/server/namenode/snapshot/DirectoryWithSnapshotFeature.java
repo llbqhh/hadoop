@@ -241,14 +241,17 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
 
         private List<INode> initChildren() {
           if (children == null) {
+            // 将指定快照状态和当前目录状态间的所有操作合并成一个ChildrenDiff对象
             final ChildrenDiff combined = new ChildrenDiff();
             for (DirectoryDiff d = DirectoryDiff.this; d != null; 
                 d = d.getPosterior()) {
               combined.combinePosterior(d.diff, null);
             }
+            // 调用apply2Current逆推出快照建立时的目录状态
             children = combined.apply2Current(ReadOnlyList.Util.asList(
                 currentDir.getChildrenList(Snapshot.CURRENT_STATE_ID)));
           }
+          // 返回快照建立时目录中的所有子目录项
           return children;
         }
 
@@ -277,7 +280,10 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
     /** @return the child with the given name. */
     INode getChild(byte[] name, boolean checkPosterior,
         INodeDirectory currentDir) {
+      // 从当前快照版本向后遍历，如果没找到，最后直接从INodeDirectory对象中找
+      // 因为这个要查找的inode很可能在某个后续的快照版本中被进行删除等操作
       for(DirectoryDiff d = this; ; d = d.getPosterior()) {
+        // 获取Inode信息，看是否在这个版本的差异操作中保存了这个对象
         final Container<INode> returned = d.diff.accessPrevious(name);
         if (returned != null) {
           // the diff is able to determine the inode
@@ -287,6 +293,7 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
           return null;
         } else if (d.getPosterior() == null) {
           // no more posterior diff, get from current inode.
+          // 所有快照版本间的DirectoryDiff对象中都没有记录，则在当前目录上查找
           return currentDir.getChild(name, Snapshot.CURRENT_STATE_ID);
         }
       }
@@ -516,7 +523,10 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
     return counts;
   }
 
-  /** Diff list sorted by snapshot IDs, i.e. in chronological order. */
+  /**
+   * 当前目录及其自目录项在不同快照间的所有差异
+   * Diff list sorted by snapshot IDs, i.e. in chronological order.
+   * */
   private final DirectoryDiffList diffs;
 
   public DirectoryWithSnapshotFeature(DirectoryDiffList diffs) {
@@ -550,10 +560,13 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
    */
   public boolean addChild(INodeDirectory parent, INode inode,
       boolean setModTime, int latestSnapshotId) throws QuotaExceededException {
+    // 根据latestSnapshotId获取diffs的ChildrenDiff字段
     ChildrenDiff diff = diffs.checkAndAddLatestSnapshotDiff(latestSnapshotId,
         parent).diff;
+    // 在ChildrenDiff的clist字段添加inode
     int undoInfo = diff.create(inode);
 
+    // 调用INodeDirectory的add方法将新建的inode对象添加到INodeDirectory的children字段中
     final boolean added = parent.addChild(inode, setModTime,
         Snapshot.CURRENT_STATE_ID);
     if (!added) {
@@ -599,14 +612,18 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
    */
   public ReadOnlyList<INode> getChildrenList(INodeDirectory currentINode,
       final int snapshotId) {
+    // 首先获取指定快照的DirectoryDiff对象
     final DirectoryDiff diff = diffs.getDiffById(snapshotId);
+    // 调用DirectoryDiff的getChildrenList获取这个快照下的所有子目录项
     return diff != null ? diff.getChildrenList(currentINode) : currentINode
         .getChildrenList(Snapshot.CURRENT_STATE_ID);
   }
   
   public INode getChild(INodeDirectory currentINode, byte[] name,
       int snapshotId) {
+    // 首先获取指定快照的DirectoryDiff对象
     final DirectoryDiff diff = diffs.getDiffById(snapshotId);
+    // 通过diff.getChild获取快照下的指定inode对象
     return diff != null ? diff.getChild(name, true, currentINode)
         : currentINode.getChild(name, Snapshot.CURRENT_STATE_ID);
   }
