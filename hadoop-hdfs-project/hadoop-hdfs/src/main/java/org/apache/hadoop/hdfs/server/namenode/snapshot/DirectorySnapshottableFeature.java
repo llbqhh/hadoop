@@ -168,12 +168,15 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
   public Snapshot addSnapshot(INodeDirectory snapshotRoot, int id, String name)
       throws SnapshotException, QuotaExceededException {
     //check snapshot quota
+    // 检查快照的数量是否超出配额
     final int n = getNumSnapshots();
     if (n + 1 > snapshotQuota) {
       throw new SnapshotException("Failed to add snapshot: there are already "
           + n + " snapshot(s) and the snapshot quota is "
           + snapshotQuota);
     }
+
+    // 构建快照
     final Snapshot s = new Snapshot(id, name, snapshotRoot);
     final byte[] nameBytes = s.getRoot().getLocalNameBytes();
     final int i = searchSnapshot(nameBytes);
@@ -182,10 +185,13 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
           + "snapshot with the same name \"" + Snapshot.getSnapshotName(s) + "\".");
     }
 
+    // 创建当前快照的DirectoryDiff对象，并存入DirectoryDiffList中
     final DirectoryDiff d = getDiffs().addDiff(id, snapshotRoot);
     d.setSnapshotRoot(s.getRoot());
+    // snapshot对象存入snapshotsByNames集合
     snapshotsByNames.add(-i - 1, s);
 
+    // 更新modificationTime
     // set modification time
     final long now = Time.now();
     snapshotRoot.updateModificationTime(now, Snapshot.CURRENT_STATE_ID);

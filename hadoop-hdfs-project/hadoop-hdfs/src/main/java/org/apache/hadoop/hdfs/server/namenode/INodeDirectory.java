@@ -255,6 +255,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
   public Snapshot addSnapshot(int id, String name) throws SnapshotException,
       QuotaExceededException {
+    // DirectorySnapshottableFeature的addSnapshot方法添加快照
     return getDirectorySnapshottableFeature().addSnapshot(this, id, name);
   }
 
@@ -275,11 +276,13 @@ public class INodeDirectory extends INodeWithAdditionalFields
     Preconditions.checkState(!isSnapshottable(),
         "this is already snapshottable, this=%s", this);
     DirectoryWithSnapshotFeature s = this.getDirectoryWithSnapshotFeature();
+    // 构造DirectorySnapshottableFeature特性
     final DirectorySnapshottableFeature snapshottable =
         new DirectorySnapshottableFeature(s);
     if (s != null) {
       this.removeFeature(s);
     }
+    // 添加到特性列表
     this.addFeature(snapshottable);
   }
 
@@ -401,11 +404,13 @@ public class INodeDirectory extends INodeWithAdditionalFields
     DirectoryWithSnapshotFeature sf;
     if (snapshotId == Snapshot.CURRENT_STATE_ID || 
         (sf = getDirectoryWithSnapshotFeature()) == null) {
+      // 如果没有快照，或者没有获取到DirectoryWithSnapshotFeature
+      // 直接获取children的ReadOnlyList然后搜索结果
       ReadOnlyList<INode> c = getCurrentChildrenList();
       final int i = ReadOnlyList.Util.binarySearch(c, name);
       return i < 0 ? null : c.get(i);
     }
-    
+    // 如果获取到DirectoryWithSnapshotFeature对象，调用它的getChild方法
     return sf.getChild(this, name, snapshotId);
   }
 
@@ -539,8 +544,10 @@ public class INodeDirectory extends INodeWithAdditionalFields
       }
       return sf.addChild(this, node, setModTime, latestSnapshotId);
     }
+    // 将要添加的INode对象放入children字段保存
     addChild(node, low);
     if (setModTime) {
+      // 更新父目录的修改时间
       // update modification time of the parent directory
       updateModificationTime(node.getModificationTime(), latestSnapshotId);
     }
@@ -554,6 +561,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     if (low >= 0) {
       return false;
     }
+    // 将要添加的INode对象放入children字段保存
     addChild(node, low);
     return true;
   }
@@ -568,7 +576,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
     // 将本节点设为node的父节点
     node.setParent(this);
-    // node加入到children集合
+    // node加入到children集合的指定位置
     children.add(-insertionPoint - 1, node);
 
     if (node.getGroupName() == null) {
