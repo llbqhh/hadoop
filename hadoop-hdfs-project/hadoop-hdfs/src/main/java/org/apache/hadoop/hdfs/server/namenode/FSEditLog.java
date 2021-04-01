@@ -235,10 +235,13 @@ public class FSEditLog implements LogsPurgeable {
   }
   
   public synchronized void initJournalsForWrite() {
+    // 检查状态
     Preconditions.checkState(state == State.UNINITIALIZED ||
         state == State.CLOSED, "Unexpected state: %s", state);
-    
+
+    // 调用initJournals做初始化
     initJournals(this.editsDirs);
+    // 状态转换为BETWEEN_LOG_SEGMENTS
     state = State.BETWEEN_LOG_SEGMENTS;
   }
   
@@ -261,18 +264,21 @@ public class FSEditLog implements LogsPurgeable {
         DFSConfigKeys.DFS_NAMENODE_EDITS_DIR_MINIMUM_DEFAULT);
 
     synchronized(journalSetLock) {
+      // 初始化journalSet集合，存放存储路径对应的所有JournalManager对象
       journalSet = new JournalSet(minimumRedundantJournals);
 
       for (URI u : dirs) {
         boolean required = FSNamesystem.getRequiredNamespaceEditsDirs(conf)
             .contains(u);
         if (u.getScheme().equals(NNStorage.LOCAL_URI_SCHEME)) {
+          // 本地uri，直接创建FileJournalManager并加入journalSet
           StorageDirectory sd = storage.getStorageDirectory(u);
           if (sd != null) {
             journalSet.add(new FileJournalManager(conf, sd, storage),
                 required, sharedEditsDirs.contains(u));
           }
         } else {
+          // 否则，根据uri创建FileJournalManager并加入journalSet
           journalSet.add(createJournal(u), required,
               sharedEditsDirs.contains(u));
         }
