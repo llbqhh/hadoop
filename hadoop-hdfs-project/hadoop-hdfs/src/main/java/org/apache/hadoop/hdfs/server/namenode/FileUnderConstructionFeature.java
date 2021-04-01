@@ -26,11 +26,18 @@ import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.namenode.INode.BlocksMapUpdateInfo;
 
 /**
+ * 为写入或追加写数据打开hdfs文件时，文件所处状态就是【构建】状态
  * Feature for under-construction file.
  */
 @InterfaceAudience.Private
 public class FileUnderConstructionFeature implements INode.Feature {
+  /**
+   * 发起文件操作的客户端名称，用于租约管理
+   */
   private String clientName; // lease holder
+  /**
+   * 客户端所在主机
+   */
   private final String clientMachine;
 
   public FileUnderConstructionFeature(final String clientName, final String clientMachine) {
@@ -51,6 +58,7 @@ public class FileUnderConstructionFeature implements INode.Feature {
   }
 
   /**
+   * 更新文件最后一个正在写的数据块长度
    * Update the length for the last block
    *
    * @param lastBlockLength
@@ -69,6 +77,7 @@ public class FileUnderConstructionFeature implements INode.Feature {
   }
 
   /**
+   * 删除快照中文件的最后一个长度为0的数据块
    * When deleting a file in the current fs directory, and the file is contained
    * in a snapshot, we should delete the last block if it's under construction
    * and its size is 0.

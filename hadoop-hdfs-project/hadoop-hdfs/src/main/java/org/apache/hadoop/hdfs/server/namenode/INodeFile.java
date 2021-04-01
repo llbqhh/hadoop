@@ -194,8 +194,10 @@ public class INodeFile extends INodeWithAdditionalFields
   INodeFile toUnderConstruction(String clientName, String clientMachine) {
     Preconditions.checkState(!isUnderConstruction(),
         "file is already under construction");
+    // 构造FileUnderConstructionFeature对象
     FileUnderConstructionFeature uc = new FileUnderConstructionFeature(
         clientName, clientMachine);
+    // 添加FileUnderConstructionFeature到feature数组
     addFeature(uc);
     return this;
   }
