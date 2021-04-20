@@ -244,7 +244,10 @@ public class FSEditLog implements LogsPurgeable {
     // 状态转换为BETWEEN_LOG_SEGMENTS
     state = State.BETWEEN_LOG_SEGMENTS;
   }
-  
+
+  /**
+   * 用在ha情况
+   */
   public synchronized void initSharedJournalsForRead() {
     if (state == State.OPEN_FOR_READING) {
       LOG.warn("Initializing shared journals for READ, already open for READ",
@@ -253,7 +256,7 @@ public class FSEditLog implements LogsPurgeable {
     }
     Preconditions.checkState(state == State.UNINITIALIZED ||
         state == State.CLOSED);
-    
+    // ha情况下，editlog的日志存储目录为共享的目录sharedEditsDirs
     initJournals(this.sharedEditsDirs);
     state = State.OPEN_FOR_READING;
   }
